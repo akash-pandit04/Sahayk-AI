@@ -42,3 +42,6 @@ Sahayak AI is a modern, decoupled web application featuring a React-based fronte
 ## 6. Deployment Architecture
 *   Local/Dev: `docker-compose up` spins up PostgreSQL, FastAPI backend, and Next.js frontend.
 *   Production: Containerized deployments, protected by Nginx/Traefik reverse proxy and HTTPS.
+
+## 7. Detailed Architecture Diagrams
+See [ARCHITECTURE_DIAGRAMS.md](./ARCHITECTURE_DIAGRAMS.md) for detailed Mermaid diagrams covering the deployment topology, voice + RAG sequence flow, deterministic eligibility pipeline, ingestion workflow, and database ER schema.

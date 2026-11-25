@@ -50,3 +50,11 @@ To run the automated test suite locally:
 ```bash
 docker-compose exec api pytest
 ```
+
+## Architecture & Documentation
+- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Architecture Diagrams (System, Voice/RAG Sequence, Eligibility, Ingestion, ER Schema)](docs/ARCHITECTURE_DIAGRAMS.md)
+- [AI Architecture](docs/AI_ARCHITECTURE.md)
+- [Voice Architecture](docs/VOICE_ARCHITECTURE.md)
+- [Database Design](docs/DATABASE_DESIGN.md)
+- [Security](docs/SECURITY.md)
