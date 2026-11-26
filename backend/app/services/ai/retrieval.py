@@ -95,11 +95,16 @@ class RetrievalService:
         
         # SQLite fallback for local testing without pgvector
         if self.db.bind.dialect.name == "sqlite":
-            stmt = (
-                select(Scheme)
-                .where(Scheme.status == SchemeStatus.PUBLISHED)
-                .limit(limit)
-            )
+            stmt = select(Scheme).where(Scheme.status == SchemeStatus.PUBLISHED)
+            schemes = list(self.db.execute(stmt).scalars().all())
+            query_tokens = {t.strip(".,?!").lower() for t in query.split() if len(t.strip(".,?!")) > 2}
+
+            def score_scheme(scheme: Scheme) -> int:
+                haystack = f"{scheme.name} {scheme.short_description} {scheme.detailed_description} {scheme.target_group or ''}".lower()
+                return sum(1 for tok in query_tokens if tok in haystack)
+
+            schemes.sort(key=score_scheme, reverse=True)
+            return schemes[:limit]
         else:
             stmt = (
                 select(Scheme)
@@ -109,5 +114,6 @@ class RetrievalService:
                 .limit(limit)
             )
         
-        result = self.db.execute(stmt)
-        return list(result.scalars().all())
+        if self.db.bind.dialect.name != "sqlite":
+            result = self.db.execute(stmt)
+            return list(result.scalars().all())

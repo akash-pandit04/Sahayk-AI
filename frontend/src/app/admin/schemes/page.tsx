@@ -43,7 +43,10 @@ export default async function SchemesListPage() {
             {schemes.map((scheme: any) => (
               <tr key={scheme.id} className="border-b border-gray-100 hover:bg-gray-50">
                 <td className="p-4">
-                  <div className="font-medium text-gray-900">{scheme.name}</div>
+                  <div className="font-medium text-gray-900">
+                    {scheme.name}
+                    <span className="ml-2 text-xs font-normal text-gray-500">v{scheme.version || 1}</span>
+                  </div>
                   <div className="text-xs text-gray-500 mt-1 truncate max-w-xs">{scheme.short_description}</div>
                 </td>
                 <td className="p-4">

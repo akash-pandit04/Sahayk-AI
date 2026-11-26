@@ -17,6 +17,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <Link href="/admin/schemes" className="block px-4 py-2 text-gray-700 rounded hover:bg-gray-100 font-medium">
             Schemes
           </Link>
+          <Link href="/admin/ingestion" className="block px-4 py-2 text-gray-700 rounded hover:bg-gray-100 font-medium">
+            Ingestion Queue
+          </Link>
           <Link href="/admin/audit-logs" className="block px-4 py-2 text-gray-700 rounded hover:bg-gray-100 font-medium">
             Audit Logs
           </Link>

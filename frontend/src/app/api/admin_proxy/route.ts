@@ -9,19 +9,44 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { endpoint, method = "GET", body } = await req.json();
+    const contentType = req.headers.get("content-type") || "";
+    let res: Response;
 
-    const res = await fetch(`${API_BASE}${endpoint}`, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    if (contentType.includes("multipart/form-data")) {
+      const incoming = await req.formData();
+      const endpoint = incoming.get("endpoint");
+      if (typeof endpoint !== "string" || !endpoint.startsWith("/")) {
+        return NextResponse.json({ error: "Invalid endpoint" }, { status: 400 });
+      }
+      const forwardForm = new FormData();
+      incoming.forEach((value, key) => {
+        if (key !== "endpoint") {
+          forwardForm.append(key, value);
+        }
+      });
+
+      res = await fetch(`${API_BASE}${endpoint}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: forwardForm,
+      });
+    } else {
+      const { endpoint, method = "GET", body } = await req.json();
+
+      res = await fetch(`${API_BASE}${endpoint}`, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    }
 
     const data = await res.json();
-    
+
     if (!res.ok) {
       return NextResponse.json({ error: data.detail || data.error?.message || "Error" }, { status: res.status });
     }

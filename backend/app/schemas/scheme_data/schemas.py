@@ -109,6 +109,8 @@ class SchemeSourceResponse(SchemeSourceBase):
     id: str
     scheme_id: str
     last_verified_at: Optional[datetime] = None
+    last_fetched_at: Optional[datetime] = None
+    content_hash: Optional[str] = None
     verified_by: Optional[str] = None
     class Config:
         from_attributes = True
@@ -142,6 +144,8 @@ class SchemeUpdate(BaseModel):
 
 class SchemeResponse(SchemeBase):
     id: str
+    version: int = 1
+    parent_scheme_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[str] = None

@@ -54,7 +54,7 @@ class AssistantOrchestrator:
         intent = extraction.get("intent", "GENERAL_QUESTION")
         
         # 4. Retrieval (Only Published Schemes)
-        candidate_schemes = await self.retrieval_service.search_schemes(message, limit=3)
+        candidate_schemes = await self.retrieval_service.search_schemes(message, limit=5)
         
         # 5. Deterministic Eligibility Evaluation (Source of Truth)
         evaluated_schemes = []
@@ -97,12 +97,19 @@ class AssistantOrchestrator:
         # (e.g. string matching to ensure we don't invent schemes)
         # If the LLM mentions a scheme name not in context_schemes, we might fallback.
         # For MVP, we trust the LLMProvider's system prompt to enforce this.
-        
+        missing_fields = list(extraction.get("missing_fields", []))
+        if not any(e["eligibility"].status == "POTENTIALLY_ELIGIBLE" for e in evaluated_schemes):
+            for e in evaluated_schemes:
+                if e["eligibility"].status == "INSUFFICIENT_INFORMATION":
+                    for field in e["eligibility"].missing_information:
+                        if field not in missing_fields:
+                            missing_fields.append(field)
+
         return {
             "conversation_id": session.session_id,
             "intent": intent,
             "response_text": response_text,
-            "missing_fields": extraction.get("missing_fields", []),
+            "missing_fields": missing_fields,
             "scheme_results": [{"id": e["scheme"].id, "name": e["scheme"].name, "status": e["eligibility"].status} for e in evaluated_schemes],
             "sources": sources_list
         }

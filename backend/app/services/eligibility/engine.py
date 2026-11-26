@@ -88,15 +88,18 @@ def evaluate_rule(rule: dict, profile: Dict[str, Any]) -> dict:
 def evaluate_logic_node(node: dict, rules_map: dict, profile: dict) -> dict:
     """
     Recursively evaluate an AST of rule logic.
-    node: {"operator": "AND", "rules": [...]} or {"rule_id": "uuid"}
+    node: {"operator": "AND", "rules": [...]} or {"rule_id": "uuid"} or inline rule dict.
     """
     if "rule_id" in node:
         rule_id = node["rule_id"]
         if rule_id not in rules_map:
             return {"result": "FAIL"} # Broken reference
         return evaluate_rule(rules_map[rule_id], profile)
-    
-    op = node.get("operator", "AND").upper()
+
+    if "field" in node:
+        return evaluate_rule(node, profile)
+
+    op = (node.get("operator") or node.get("condition") or "AND").upper()
     child_nodes = node.get("rules", [])
     
     results = [evaluate_logic_node(child, rules_map, profile) for child in child_nodes]
@@ -139,7 +142,7 @@ def evaluate_eligibility(profile: Dict[str, Any], rules: List[EligibilityRule], 
     """
     Evaluates a user profile against scheme rules deterministically.
     """
-    if not rules:
+    if not rules and not rule_logic:
         return EligibilityResult(
             status="POTENTIALLY_ELIGIBLE",
             explanation="No specific eligibility rules found."
@@ -152,7 +155,7 @@ def evaluate_eligibility(profile: Dict[str, Any], rules: List[EligibilityRule], 
         "value": r.value,
         "data_type": r.data_type,
         "is_mandatory": r.is_mandatory
-    } for r in rules}
+    } for r in (rules or [])}
 
     # If no logic is defined, default to ALL rules must match (Global AND)
     if not rule_logic:

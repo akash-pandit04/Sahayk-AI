@@ -24,8 +24,11 @@ class MockLLMProvider(LLMProvider):
         if "boy" in user_message.lower():
             updates["gender"] = "male"
             
-        if "below poverty line" in user_message.lower():
+        if "below poverty line" in user_message.lower() or "bpl" in user_message.lower():
             updates["bpl_status"] = True
+
+        if "low income" in user_message.lower() or "low-income" in user_message.lower():
+            updates["income_group"] = "low"
                 
         return {
             "intent": "FIND_SCHEME",
@@ -34,13 +37,38 @@ class MockLLMProvider(LLMProvider):
         }
 
     async def generate_response(self, user_message: str, context: dict) -> str:
-        # Mocking grounded validation
+        # Mocking grounded validation using deterministic eligibility results
         schemes = context.get("retrieved_schemes", [])
         if not schemes:
             return "I'm sorry, I couldn't find any relevant schemes."
-        
-        scheme_names = [s["name"] for s in schemes]
-        return f"Based on your profile, I found: {', '.join(scheme_names)}. Your status is {context.get('eligibility_result', {}).get('status')}."
+
+        eligible = [
+            s for s in schemes
+            if s.get("eligibility_status", {}).get("status") == "POTENTIALLY_ELIGIBLE"
+        ]
+        insufficient = [
+            s for s in schemes
+            if s.get("eligibility_status", {}).get("status") == "INSUFFICIENT_INFORMATION"
+        ]
+
+        if eligible:
+            scheme_names = [s["name"] for s in eligible]
+            return (
+                f"Based on the information you provided, you appear to meet the eligibility criteria for: "
+                f"{', '.join(scheme_names)}. Final approval is subject to verification by the concerned authority."
+            )
+
+        if insufficient:
+            missing_fields = []
+            for s in insufficient:
+                for field in s.get("eligibility_status", {}).get("missing_information", []):
+                    if field not in missing_fields:
+                        missing_fields.append(field)
+            if missing_fields:
+                return f"To check which schemes you qualify for, please provide more details such as: {', '.join(missing_fields)}."
+            return "Please provide a bit more information about your age, occupation, or location so I can check your options."
+
+        return "Based on the information provided, you do not meet the criteria for the evaluated schemes."
 
 class MockEmbeddingProvider(EmbeddingProvider):
     async def generate_embedding(self, text: str) -> List[float]:
