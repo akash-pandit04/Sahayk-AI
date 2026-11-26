@@ -8,8 +8,8 @@ A multilingual, voice-first AI assistant to help underserved citizens in India d
 - [x] **Phase 3 — AI Core, RAG & Deterministic Eligibility**: `pgvector` embeddings (`scheme_embeddings`), AST `rule_logic` engine, grounded orchestrator
 - [x] **Phase 4 — Citizen PWA & Voice Pipeline**: Mobile-first Citizen Voice UI (`/`), BFF voice routes (`/api/voice/*`, `/api/assistant/query`), STT/TTS abstraction
 - [x] **Phase 5 — Real Scheme Knowledge Base & Verified Ingestion**: Human-in-the-loop URL/PDF ingestion (`/admin/ingestion`), SSRF protection, prompt-injection safeguards, source freshness & scheme versioning
-- [x] **Phase 6 — Security Hardening & Production Prep**: Production provider/JWT guardrails, security headers, PII scrubbing, session retention purge, OpenAI voice provider, Nginx + `docker-compose.prod.yml`, GitHub Actions CI
-- [x] **Phase 7 — Bhashini Integration, BFF Routing & Live Verification**: Bhashini ULCA STT/TTS client, Next.js BFF routes for browser/Docker parity, full-stack container verification
+- [x] **Phase 6 — Security Hardening & Production Prep**: Production provider/JWT guardrails, security headers, PII scrubbing, session retention purge, Nginx + `docker-compose.prod.yml`, GitHub Actions CI
+- [x] **Phase 7 — Gemini Integration, BFF Routing & Live Verification**: Google Gemini LLM, 1536-dim Embeddings, and STT/TTS voice providers (`GEMINI_API_KEY`), Next.js BFF routes for browser/Docker parity, full-stack container verification
 
 ## Prerequisites
 - Docker and Docker Compose v2
@@ -20,7 +20,7 @@ A multilingual, voice-first AI assistant to help underserved citizens in India d
    ```bash
    cp .env.example .env
    ```
-2. Update `.env` with secure values (especially `JWT_SECRET_KEY`, `OPENAI_API_KEY`, and `VOICE_STT_PROVIDER` / `VOICE_TTS_PROVIDER` for production).
+2. Update `.env` with secure values (especially `JWT_SECRET_KEY`, `GEMINI_API_KEY`, and `VOICE_STT_PROVIDER=gemini` / `VOICE_TTS_PROVIDER=gemini` for production).
 
 ## Running with Docker (Development)
 Start PostgreSQL, FastAPI API (`http://localhost:8000`), and Next.js Frontend (`http://localhost:3000`):

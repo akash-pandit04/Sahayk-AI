@@ -3,20 +3,18 @@
 ## 1. Prerequisites
 - Docker & Docker Compose v2
 - TLS-terminating load balancer or reverse proxy (e.g., Nginx + Certbot / cloud LB) in front of port `80`
-- Valid OpenAI API key (and/or configured Bhashini credentials)
+- Valid Google Gemini API key (`GEMINI_API_KEY`)
 
 ## 2. Required Production Environment Variables
 Copy `.env.example` to `.env` and set **non-default** production values:
 - `ENVIRONMENT=production`
 - `JWT_SECRET_KEY`: Random 32+ character secret (`openssl rand -hex 32`)
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: Strong database credentials
-- `OPENAI_API_KEY`: Required when `ENVIRONMENT=production`
-- `VOICE_STT_PROVIDER=openai` (or `bhashini`) — `mock` is blocked at startup in production
-- `VOICE_TTS_PROVIDER=openai` (or `bhashini`) — `mock` is blocked at startup in production
-- `BHASHINI_API_KEY`, `BHASHINI_USER_ID`, `BHASHINI_PIPELINE_URL`: Required if using `bhashini` voice providers
+- `GEMINI_API_KEY`: Required when `ENVIRONMENT=production`
+- `VOICE_STT_PROVIDER=gemini` — `mock` is blocked at startup in production
+- `VOICE_TTS_PROVIDER=gemini` — `mock` is blocked at startup in production
 - `COOKIE_SECURE=true` when serving behind HTTPS/TLS
 - `CORS_ORIGINS`: Exact production origin(s), e.g. `["https://sahayak.example.org"]`
-- `SESSION_RETENTION_DAYS=7`
 
 ## 3. Build & Start Production Stack
 ```bash

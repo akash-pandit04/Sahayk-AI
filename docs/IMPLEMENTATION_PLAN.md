@@ -29,9 +29,9 @@
 ## Phase 6: Security Hardening & Production Preparation
 *   [x] Enforce production startup and factory guardrails (`ENVIRONMENT=production` blocks `mock` providers and weak JWT secrets).
 *   [x] Add HTTP security headers middleware, PII minimization scrubbing, and `purge_expired_sessions.py`.
-*   [x] Implement `OpenAISTTProvider` / `OpenAITTSProvider`, Nginx reverse proxy, `docker-compose.prod.yml`, `DEPLOYMENT.md`, and GitHub Actions CI.
+*   [x] Add Nginx reverse proxy, `docker-compose.prod.yml`, `DEPLOYMENT.md`, and GitHub Actions CI.
 
-## Phase 7: Bhashini Provider, BFF Routing & Live Stack Verification
-*   [x] Implement `BhashiniSTTProvider` and `BhashiniTTSProvider` ULCA inference client.
+## Phase 7: Gemini Integration, BFF Routing & Live Stack Verification
+*   [x] Implement `GeminiLLMProvider`, `GeminiEmbeddingProvider` (1536-dim), `GeminiSTTProvider`, and `GeminiTTSProvider`.
 *   [x] Route browser voice/assistant requests through Next.js BFF API routes (`/api/voice/*`, `/api/assistant/query`) for seamless Docker & local networking.
 *   [x] Verify full Docker Compose stack (PostgreSQL + `pgvector`, FastAPI, Next.js frontend) end-to-end.

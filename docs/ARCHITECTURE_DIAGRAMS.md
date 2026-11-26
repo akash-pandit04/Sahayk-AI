@@ -18,8 +18,8 @@ flowchart LR
     Frontend -->|"/api/admin_proxy -> /api/v1/admin/*"| Backend
 
     Backend -->|"SQLAlchemy 2.x"| DB["PostgreSQL 16 + pgvector (Port 5433 -> 5432)"]
-    Backend -->|"LLM & Embeddings"| AIProvider["LLM / Embedding Provider (OpenAI or Mock)"]
-    Backend -->|"STT & TTS"| VoiceProvider["Voice Provider (Mock or Configured Provider)"]
+    Backend -->|"LLM & 1536-dim Embeddings"| AIProvider["Google Gemini API (or Mock in Dev)"]
+    Backend -->|"STT & TTS"| VoiceProvider["Gemini Multimodal Voice / TTS (or Mock in Dev)"]
     Backend -->|"SSRF-Protected Fetch"| GovtSites["Official Govt Portals & PDFs"]
 ```
 

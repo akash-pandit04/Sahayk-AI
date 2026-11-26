@@ -14,23 +14,13 @@ def get_stt_provider() -> STTProvider:
         if _is_production():
             raise ValueError("VOICE_STT_PROVIDER='mock' is forbidden in production.")
         return MockSTTProvider()
-    if provider == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
+    if provider == "gemini":
+        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            raise ValueError("OPENAI_API_KEY is required when VOICE_STT_PROVIDER='openai'.")
-        from app.services.voice.providers.openai_provider import OpenAISTTProvider
-        return OpenAISTTProvider(api_key=api_key)
-    if provider == "bhashini":
-        api_key = os.getenv("BHASHINI_API_KEY")
-        if not api_key:
-            raise ValueError("BHASHINI_API_KEY is required when VOICE_STT_PROVIDER='bhashini'.")
-        from app.services.voice.providers.bhashini_provider import BhashiniSTTProvider, DEFAULT_BHASHINI_URL
-        return BhashiniSTTProvider(
-            api_key=api_key,
-            pipeline_url=os.getenv("BHASHINI_PIPELINE_URL") or DEFAULT_BHASHINI_URL,
-            user_id=os.getenv("BHASHINI_USER_ID"),
-        )
-    raise ValueError(f"Invalid or missing VOICE_STT_PROVIDER: {provider}. Production must not use 'mock'.")
+            raise ValueError("GEMINI_API_KEY is required when VOICE_STT_PROVIDER='gemini'.")
+        from app.services.voice.providers.gemini_provider import GeminiSTTProvider
+        return GeminiSTTProvider(api_key=api_key)
+    raise ValueError(f"Invalid or missing VOICE_STT_PROVIDER: {provider}. Production must use 'gemini'.")
 
 
 def get_tts_provider() -> TTSProvider:
@@ -40,20 +30,10 @@ def get_tts_provider() -> TTSProvider:
         if _is_production():
             raise ValueError("VOICE_TTS_PROVIDER='mock' is forbidden in production.")
         return MockTTSProvider()
-    if provider == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
+    if provider == "gemini":
+        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            raise ValueError("OPENAI_API_KEY is required when VOICE_TTS_PROVIDER='openai'.")
-        from app.services.voice.providers.openai_provider import OpenAITTSProvider
-        return OpenAITTSProvider(api_key=api_key)
-    if provider == "bhashini":
-        api_key = os.getenv("BHASHINI_API_KEY")
-        if not api_key:
-            raise ValueError("BHASHINI_API_KEY is required when VOICE_TTS_PROVIDER='bhashini'.")
-        from app.services.voice.providers.bhashini_provider import BhashiniTTSProvider, DEFAULT_BHASHINI_URL
-        return BhashiniTTSProvider(
-            api_key=api_key,
-            pipeline_url=os.getenv("BHASHINI_PIPELINE_URL") or DEFAULT_BHASHINI_URL,
-            user_id=os.getenv("BHASHINI_USER_ID"),
-        )
-    raise ValueError(f"Invalid or missing VOICE_TTS_PROVIDER: {provider}. Production must not use 'mock'.")
+            raise ValueError("GEMINI_API_KEY is required when VOICE_TTS_PROVIDER='gemini'.")
+        from app.services.voice.providers.gemini_provider import GeminiTTSProvider
+        return GeminiTTSProvider(api_key=api_key)
+    raise ValueError(f"Invalid or missing VOICE_TTS_PROVIDER: {provider}. Production must use 'gemini'.")

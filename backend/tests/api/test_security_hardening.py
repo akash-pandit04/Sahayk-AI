@@ -29,9 +29,9 @@ def test_production_guardrails_reject_insecure_defaults():
         ENVIRONMENT="production",
         DATABASE_URL="sqlite:///./test.db",
         JWT_SECRET_KEY=INSECURE_DEFAULT_JWT_SECRET,
-        VOICE_STT_PROVIDER="openai",
-        VOICE_TTS_PROVIDER="openai",
-        OPENAI_API_KEY="sk-test",
+        VOICE_STT_PROVIDER="gemini",
+        VOICE_TTS_PROVIDER="gemini",
+        GEMINI_API_KEY="AIza-test",
     )
     with pytest.raises(RuntimeError, match="JWT_SECRET_KEY"):
         weak_jwt.validate_production_settings()
@@ -41,22 +41,22 @@ def test_production_guardrails_reject_insecure_defaults():
         DATABASE_URL="sqlite:///./test.db",
         JWT_SECRET_KEY="a" * 40,
         VOICE_STT_PROVIDER="mock",
-        VOICE_TTS_PROVIDER="openai",
-        OPENAI_API_KEY="sk-test",
+        VOICE_TTS_PROVIDER="gemini",
+        GEMINI_API_KEY="AIza-test",
     )
     with pytest.raises(RuntimeError, match="Mock voice providers"):
         mock_voice.validate_production_settings()
 
-    missing_openai = Settings(
+    missing_gemini = Settings(
         ENVIRONMENT="production",
         DATABASE_URL="sqlite:///./test.db",
         JWT_SECRET_KEY="a" * 40,
-        VOICE_STT_PROVIDER="openai",
-        VOICE_TTS_PROVIDER="openai",
-        OPENAI_API_KEY=None,
+        VOICE_STT_PROVIDER="gemini",
+        VOICE_TTS_PROVIDER="gemini",
+        GEMINI_API_KEY=None,
     )
-    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
-        missing_openai.validate_production_settings()
+    with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
+        missing_gemini.validate_production_settings()
 
 
 def test_provider_factories_forbid_mock_in_production():
@@ -66,7 +66,7 @@ def test_provider_factories_forbid_mock_in_production():
             "ENVIRONMENT": "production",
             "VOICE_STT_PROVIDER": "mock",
             "VOICE_TTS_PROVIDER": "mock",
-            "OPENAI_API_KEY": "",
+            "GEMINI_API_KEY": "",
         },
         clear=False,
     ):

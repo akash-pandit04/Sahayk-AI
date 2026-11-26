@@ -21,13 +21,13 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
 
-    # AI & Voice Providers
-    OPENAI_API_KEY: Optional[str] = None
+    # Gemini AI & Voice Providers
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
+    GEMINI_TTS_MODEL: str = "gemini-2.5-flash-preview-tts"
     VOICE_STT_PROVIDER: str = "mock"
     VOICE_TTS_PROVIDER: str = "mock"
-    BHASHINI_API_KEY: Optional[str] = None
-    BHASHINI_USER_ID: Optional[str] = None
-    BHASHINI_PIPELINE_URL: Optional[str] = None
 
     # Privacy / Retention
     SESSION_RETENTION_DAYS: int = 7
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     FIRST_ADMIN_EMAIL: str = "admin@sahayak.local"
     FIRST_ADMIN_PASSWORD: str = "adminpassword"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding='utf-8', extra='ignore')
 
     def validate_production_settings(self) -> None:
         """Fail fast if unsafe defaults or mock providers are enabled in production."""
@@ -49,8 +49,8 @@ class Settings(BaseSettings):
         if self.VOICE_STT_PROVIDER.lower() in ("", "mock") or self.VOICE_TTS_PROVIDER.lower() in ("", "mock"):
             raise RuntimeError("Mock voice providers are forbidden when ENVIRONMENT=production.")
 
-        if not self.OPENAI_API_KEY:
-            raise RuntimeError("OPENAI_API_KEY must be configured when ENVIRONMENT=production.")
+        if not self.GEMINI_API_KEY:
+            raise RuntimeError("GEMINI_API_KEY must be configured when ENVIRONMENT=production.")
 
 
 settings = Settings()
