@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-3.1-flash-lite"
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
-    GEMINI_TTS_MODEL: str = "gemini-3.8-flash-tts"
+    GEMINI_TTS_MODEL: str = "gemini-3.8-flash-lite-tts"
     VOICE_STT_PROVIDER: str = "mock"
     VOICE_TTS_PROVIDER: str = "mock"
 

@@ -83,11 +83,14 @@ class RetrievalService:
         self.db.commit()
         return True
 
-    async def search_schemes(self, query: str, limit: int = 5) -> List[Scheme]:
+    async def search_schemes(
+        self, query: str, limit: int = 5, query_vector: Optional[List[float]] = None
+    ) -> List[Scheme]:
         """
         Searches ONLY published schemes using vector similarity.
         """
-        query_vector = await self.embedding_provider.generate_embedding(query)
+        if query_vector is None and self.db.bind.dialect.name != "sqlite":
+            query_vector = await self.embedding_provider.generate_embedding(query)
         
         # pgvector cosine distance: embedding.cosine_distance(query_vector)
         # We only consider PUBLISHED schemes (which is already enforced by sync_scheme_embedding, 

@@ -1,9 +1,10 @@
+import asyncio
 import re
 import uuid
 from typing import Dict, Any, List
 from sqlalchemy.orm import Session
 from app.models.scheme_data.models import ConversationSession, Scheme
-from app.services.ai.providers.factory import get_llm_provider
+from app.services.ai.providers.factory import get_embedding_provider, get_llm_provider
 from app.services.ai.retrieval import RetrievalService
 from app.services.eligibility.engine import evaluate_eligibility
 
@@ -33,6 +34,7 @@ class AssistantOrchestrator:
     def __init__(self, db: Session):
         self.db = db
         self.llm_provider = get_llm_provider()
+        self.embedding_provider = get_embedding_provider()
         self.retrieval_service = RetrievalService(db)
         
     def get_or_create_session(self, session_id: str) -> ConversationSession:
@@ -67,18 +69,25 @@ class AssistantOrchestrator:
     async def process_query(self, session_id: str, message: str, language: str = "en") -> dict:
         # 1. Load Session
         session = self.get_or_create_session(session_id)
-        
-        # 2. Extract Intent and Profile Updates
-        extraction = await self.llm_provider.extract_intent_and_profile(message, session.profile_data)
-        
+
+        # 2. Extract Intent/Profile & Embed Query in parallel to minimize latency
+        if self.db.bind.dialect.name == "sqlite":
+            extraction = await self.llm_provider.extract_intent_and_profile(message, session.profile_data)
+            query_vector = None
+        else:
+            extraction, query_vector = await asyncio.gather(
+                self.llm_provider.extract_intent_and_profile(message, session.profile_data),
+                self.embedding_provider.generate_embedding(message),
+            )
+
         # 3. Update Profile Context
         if extraction.get("profile_updates"):
             self.update_session_profile(session, extraction["profile_updates"])
-            
+
         intent = extraction.get("intent", "GENERAL_QUESTION")
-        
+
         # 4. Retrieval (Only Published Schemes)
-        candidate_schemes = await self.retrieval_service.search_schemes(message, limit=5)
+        candidate_schemes = await self.retrieval_service.search_schemes(message, limit=5, query_vector=query_vector)
         
         # 5. Deterministic Eligibility Evaluation (Source of Truth)
         evaluated_schemes = []
@@ -95,18 +104,30 @@ class AssistantOrchestrator:
         # 6. Build Context for LLM
         # Do not leak DB models directly, serialize safely.
         context_schemes = []
-        sources_list = []
+        eligible_sources = []
+        fallback_sources = []
+        seen_urls = set()
         for eval_item in evaluated_schemes:
             scheme = eval_item["scheme"]
+            status_val = eval_item["eligibility"].status
             sources = [{"title": s.title, "url": s.url} for s in scheme.sources if s.verification_status == "VERIFIED"]
-            sources_list.extend(sources)
-            
+            for src in sources:
+                if src["url"] not in seen_urls:
+                    if status_val == "POTENTIALLY_ELIGIBLE":
+                        eligible_sources.append(src)
+                        seen_urls.add(src["url"])
+                    elif status_val == "INSUFFICIENT_INFORMATION":
+                        fallback_sources.append(src)
+                        seen_urls.add(src["url"])
+
             context_schemes.append({
                 "name": scheme.name,
                 "description": scheme.detailed_description,
                 "eligibility_status": eval_item["eligibility"].dict(),
                 "benefits": [{"type": b.benefit_type, "desc": b.description} for b in scheme.benefits]
             })
+
+        sources_list = eligible_sources if eligible_sources else fallback_sources
 
         context = {
             "profile": session.profile_data,

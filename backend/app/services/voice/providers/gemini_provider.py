@@ -73,16 +73,15 @@ class GeminiTTSProvider(TTSProvider):
 
     def __init__(self, api_key: str, model: str | None = None, voice_name: str = "Kore"):
         self.api_key = api_key
-        self.model = model or os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts")
+        self.model = model or os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-lite-tts")
         self.voice_name = voice_name
 
     async def synthesize(self, text: str, language: str) -> bytes:
-        url = f"{GEMINI_API_BASE}/{self.model}:generateContent"
         payload = {
             "contents": [
                 {
                     "parts": [
-                        {"text": f"Speak clearly and naturally in language '{language}': {text}"}
+                        {"text": f"Read aloud naturally and clearly in language '{language}': {text}"}
                     ]
                 }
             ],
@@ -96,11 +95,34 @@ class GeminiTTSProvider(TTSProvider):
             },
         }
         headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
+        candidates = [self.model]
+        for fallback in ("gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"):
+            if fallback not in candidates:
+                candidates.append(fallback)
 
+        last_err: Exception | None = None
+        data = None
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+            for model_name in candidates:
+                url = f"{GEMINI_API_BASE}/{model_name}:generateContent"
+                try:
+                    resp = await client.post(url, json=payload, headers=headers)
+                    if resp.status_code in (404, 429, 503):
+                        last_err = httpx.HTTPStatusError(
+                            f"{resp.status_code} for {model_name}", request=resp.request, response=resp
+                        )
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
+                    break
+                except (httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+                    last_err = e
+                    continue
+
+        if data is None:
+            if last_err:
+                raise last_err
+            raise RuntimeError("No Gemini TTS model succeeded")
 
         inline = data["candidates"][0]["content"]["parts"][0]["inlineData"]
         audio_bytes = base64.b64decode(inline["data"])

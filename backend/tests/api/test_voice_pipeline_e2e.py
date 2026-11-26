@@ -123,3 +123,20 @@ async def test_empty_synthesis_text(client):
         json={"text": "   ", "language": "hi"}
     )
     assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_voice_turn_single_roundtrip(client):
+    res = client.post(
+        "/api/v1/voice/turn",
+        data={"language": "hi"},
+        files={"audio": ("turn.wav", b"RIFF" + b"\x00" * 200, "audio/wav")},
+        headers={"X-Mock-Transcription": urllib.parse.quote("मेरी उम्र 65 साल है।")},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["user_text"] == "मेरी उम्र 65 साल है।"
+    assert data["conversation_id"]
+    assert data["response_text"]
+    assert data["audio_base64"]
+    assert data["audio_mime_type"] == "audio/wav"
