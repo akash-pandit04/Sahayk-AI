@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 interface IngestionRecordItem {
@@ -51,18 +51,18 @@ export default function IngestionDashboardPage() {
     return data;
   };
 
-  const loadRecords = async () => {
+  const loadRecords = useCallback(async () => {
     try {
       const data = await proxyCall("/admin/ingestion", "GET");
       setRecords(data.items || []);
     } catch (e: any) {
       setError(e.message);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadRecords();
-  }, []);
+  }, [loadRecords]);
 
   const handleIngestUrl = async (e: React.FormEvent) => {
     e.preventDefault();

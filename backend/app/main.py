@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
@@ -27,14 +27,30 @@ if settings.CORS_ORIGINS:
         allow_headers=["*"],
     )
 
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=()"
+    if request.url.path.startswith(f"{settings.API_V1_STR}/admin") or request.url.path.startswith(f"{settings.API_V1_STR}/auth"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 # Setup centralized exception handling
 setup_exception_handlers(app)
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+
 @app.on_event("startup")
 async def startup_event():
+    settings.validate_production_settings()
     logger.info("Starting up Sahayak AI Backend API")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():

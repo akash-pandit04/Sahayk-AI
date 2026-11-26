@@ -1,3 +1,4 @@
+import re
 import uuid
 from typing import Dict, Any, List
 from sqlalchemy.orm import Session
@@ -5,6 +6,28 @@ from app.models.scheme_data.models import ConversationSession, Scheme
 from app.services.ai.providers.factory import get_llm_provider
 from app.services.ai.retrieval import RetrievalService
 from app.services.eligibility.engine import evaluate_eligibility
+
+SENSITIVE_PROFILE_KEYS = {
+    "aadhaar", "aadhar", "aadhaar_number", "pan", "pan_number",
+    "phone", "mobile", "phone_number", "email", "bank_account", "ifsc", "passport",
+}
+_AADHAAR_RE = re.compile(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b")
+_PHONE_RE = re.compile(r"\b(?:\+91[\s-]?)?[6-9]\d{9}\b")
+_EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+
+
+def sanitize_profile_updates(updates: dict) -> dict:
+    """Enforce data minimization by dropping PII keys and scrubbing sensitive patterns."""
+    cleaned = {}
+    for k, v in updates.items():
+        if k.lower() in SENSITIVE_PROFILE_KEYS:
+            continue
+        if isinstance(v, str):
+            v = _AADHAAR_RE.sub("[REDACTED]", v)
+            v = _PHONE_RE.sub("[REDACTED]", v)
+            v = _EMAIL_RE.sub("[REDACTED]", v)
+        cleaned[k] = v
+    return cleaned
 
 class AssistantOrchestrator:
     def __init__(self, db: Session):
@@ -27,7 +50,8 @@ class AssistantOrchestrator:
     def update_session_profile(self, session: ConversationSession, updates: dict):
         if not updates:
             return
-            
+
+        updates = sanitize_profile_updates(updates)
         # Merge updates. We treat None as 'remove' or 'unknown'
         current_data = dict(session.profile_data)
         for k, v in updates.items():
