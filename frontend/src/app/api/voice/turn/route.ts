@@ -16,8 +16,13 @@ export async function POST(req: NextRequest) {
       body: formData,
     });
 
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    const text = await res.text();
+    try {
+      const data = JSON.parse(text);
+      return NextResponse.json(data, { status: res.status });
+    } catch {
+      return NextResponse.json({ detail: text || "Upstream error" }, { status: res.status });
+    }
   } catch (error: any) {
     return NextResponse.json({ detail: error.message || "Voice turn proxy failed" }, { status: 500 });
   }

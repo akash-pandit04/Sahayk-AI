@@ -12,7 +12,7 @@ GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 class GeminiLLMProvider(LLMProvider):
     def __init__(self, api_key: str, model: str | None = None):
         self.api_key = api_key
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
     async def _generate(self, system_instruction: str, user_text: str, json_mode: bool = False) -> str:
         payload: dict = {
@@ -24,12 +24,12 @@ class GeminiLLMProvider(LLMProvider):
 
         headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
         candidates = [self.model]
-        for fallback in ("gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-flash-latest"):
+        for fallback in ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest"):
             if fallback not in candidates:
                 candidates.append(fallback)
 
         last_err: Exception | None = None
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=12.0) as client:
             for model_name in candidates:
                 url = f"{GEMINI_API_BASE}/{model_name}:generateContent"
                 try:
@@ -52,9 +52,11 @@ class GeminiLLMProvider(LLMProvider):
 
     async def extract_intent_and_profile(self, user_message: str, current_profile: dict) -> dict:
         system_prompt = (
-            "Extract citizen intent and demographic/eligibility profile attributes from the message. "
-            "Never collect PII such as Aadhaar numbers, PAN, phone numbers, or emails. "
-            'Return ONLY valid JSON matching: {"intent": "str", "profile_updates": {}, "missing_fields": []}.'
+            "Classify the citizen's intent into one of: GREETING, IDENTITY, OUT_OF_SCOPE, FIND_SCHEME, SCHEME_INFO. "
+            "Use GREETING for hello/hi/namaste, IDENTITY for 'what is your name/who are you', OUT_OF_SCOPE for non-scheme topics (weather, coding, sports, etc.), and FIND_SCHEME/SCHEME_INFO for government schemes or personal eligibility info. "
+            "Also extract demographic/eligibility profile attributes (age, gender, state, occupation, bpl_status, income_group, location_type, owns_pucca_house, has_agricultural_land). "
+            "Never collect PII (Aadhaar, PAN, phone, email). "
+            'Return ONLY valid JSON: {"intent": "str", "profile_updates": {}, "missing_fields": []}.'
         )
         user_prompt = f"Current Profile: {json.dumps(current_profile)}\nUser Message: {user_message}"
         content = await self._generate(system_prompt, user_prompt, json_mode=True)
@@ -62,6 +64,24 @@ class GeminiLLMProvider(LLMProvider):
 
     async def generate_response(self, user_message: str, context: dict) -> str:
         language = context.get("language", "en")
+        intent = context.get("intent", "FIND_SCHEME")
+
+        if intent in ("GREETING", "IDENTITY"):
+            system_prompt = (
+                f"You are Sahayak AI, a friendly voice assistant that helps citizens of India discover verified Government of India welfare schemes. "
+                f"Respond warmly in language code '{language}' in 1 to 2 short plain-text spoken sentences (no markdown). "
+                "Introduce yourself as Sahayak AI and invite them to ask about government schemes or tell you their age/occupation."
+            )
+            return await self._generate(system_prompt, user_message, json_mode=False)
+
+        if intent == "OUT_OF_SCOPE":
+            system_prompt = (
+                f"You are Sahayak AI, a dedicated assistant ONLY for Government of India welfare schemes. "
+                f"Politely explain in language code '{language}' in 1 to 2 short plain-text spoken sentences (no markdown) "
+                "that you only help with government welfare schemes and eligibility, and ask how you can help with a scheme."
+            )
+            return await self._generate(system_prompt, user_message, json_mode=False)
+
         system_prompt = f"""SYSTEM INSTRUCTIONS:
 You are Sahayak AI, a live voice assistant helping citizens of India find government welfare schemes.
 

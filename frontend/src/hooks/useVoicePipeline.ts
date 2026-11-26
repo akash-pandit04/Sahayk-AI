@@ -6,12 +6,12 @@ interface UseVoicePipelineProps {
   language: string;
 }
 
-const SPEECH_THRESHOLD = 0.02;
-const BARGE_IN_THRESHOLD = 0.045;
-const SILENCE_PAUSE_MS = 950;
+const MIN_SPEECH_THRESHOLD = 0.025;
+const BARGE_IN_MULTIPLIER = 2.6;
+const SILENCE_PAUSE_MS = 900;
 const MIN_SPEECH_MS = 350;
-const BARGE_IN_HOLD_MS = 180;
-const MAX_UTTERANCE_MS = 18000;
+const BARGE_IN_HOLD_MS = 200;
+const MAX_UTTERANCE_MS = 16000;
 const SILENT_CYCLE_MS = 4000;
 
 export function useVoicePipeline({ language }: UseVoicePipelineProps) {
@@ -26,6 +26,7 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
   const stateRef = useRef<PipelineState>('IDLE');
   const liveCallRef = useRef(false);
   const conversationIdRef = useRef<string | null>(null);
+  const isSendingRef = useRef(false);
 
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -33,13 +34,13 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
   const vadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const discardOnStopRef = useRef(false);
+  const recorderTokenRef = useRef(0);
 
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const activeObjectUrlRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  const noiseFloorRef = useRef(0.01);
   const speechActiveRef = useRef(false);
   const speechStartedAtRef = useRef(0);
   const lastSpeechAtRef = useRef(0);
@@ -68,13 +69,16 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
   }, []);
 
   const stopActiveRecorder = useCallback((discard: boolean) => {
-    discardOnStopRef.current = discard;
+    if (discard) {
+      // Invalidate previous recorder token so its async onstop callback cannot fire sendVoiceTurn
+      recorderTokenRef.current += 1;
+    }
     const rec = recorderRef.current;
     if (rec && rec.state !== 'inactive') {
       try {
         rec.stop();
       } catch {
-        // ignore recorder already stopped
+        // ignore if already stopped
       }
     }
     recorderRef.current = null;
@@ -93,27 +97,28 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
         setIsUserSpeaking(false);
       }
 
+      const token = ++recorderTokenRef.current;
+      const chunks: Blob[] = [];
       const recorder = new MediaRecorder(stream);
       recorderRef.current = recorder;
-      audioChunksRef.current = [];
-      discardOnStopRef.current = false;
       recorderStartedAtRef.current = Date.now();
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
+        if (e.data.size > 0 && recorderTokenRef.current === token) {
+          chunks.push(e.data);
         }
       };
 
       recorder.onstop = async () => {
-        const shouldDiscard = discardOnStopRef.current;
-        const chunks = audioChunksRef.current;
-        audioChunksRef.current = [];
-        if (shouldDiscard || !liveCallRef.current || chunks.length === 0) {
+        // Only the active, non-discarded recorder may submit a turn
+        if (recorderTokenRef.current !== token || !liveCallRef.current || chunks.length === 0) {
+          return;
+        }
+        if (isSendingRef.current) {
           return;
         }
         const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-        if (blob.size < 250) {
+        if (blob.size < 300) {
           if (liveCallRef.current) beginListeningTurn(false);
           return;
         }
@@ -127,16 +132,25 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
     [stopActiveRecorder, updateState]
   );
 
-  const speakWithBrowserFallback = useCallback(
-    (text: string) => {
+  const speakFast = useCallback(
+    (text: string): boolean => {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-        if (liveCallRef.current) beginListeningTurn(false);
-        else updateState('IDLE');
-        return;
+        return false;
       }
+      const targetPrefix = language === 'hi' ? 'hi' : language === 'ta' ? 'ta' : language === 'te' ? 'te' : 'en';
+      const voices = window.speechSynthesis.getVoices();
+      const matchedVoice = voices.find((v) => v.lang.toLowerCase().startsWith(targetPrefix));
+      // If browser has no voice for this language, return false so Gemini TTS handles it
+      if (voices.length > 0 && !matchedVoice && targetPrefix !== 'en') {
+        return false;
+      }
+
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = language === 'hi' ? 'hi-IN' : language === 'ta' ? 'ta-IN' : language === 'te' ? 'te-IN' : 'en-IN';
+      if (matchedVoice) utter.voice = matchedVoice;
+      utter.rate = 1.03;
+
       utter.onend = () => {
         if (liveCallRef.current) beginListeningTurn(false);
         else updateState('IDLE');
@@ -145,63 +159,78 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
         if (liveCallRef.current) beginListeningTurn(false);
         else updateState('IDLE');
       };
+
       updateState('SPEAKING');
       window.speechSynthesis.speak(utter);
+      return true;
     },
     [beginListeningTurn, language, updateState]
   );
 
-  const playAudioBase64 = useCallback(
-    async (audioBase64: string | null, mimeType: string | null, fallbackText: string) => {
-      if (!audioBase64) {
-        speakWithBrowserFallback(fallbackText);
-        return;
-      }
-
+  const playServerAudioOrFallback = useCallback(
+    async (text: string, audioBase64?: string | null, mimeType?: string | null) => {
       try {
         stopPlayback();
-        const binary = atob(audioBase64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
+        let blobUrl: string;
+        if (audioBase64) {
+          const binary = atob(audioBase64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          blobUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType || 'audio/wav' }));
+        } else {
+          const ttsRes = await fetch('/api/voice/synthesize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, language }),
+          });
+          if (!ttsRes.ok) throw new Error('TTS failed');
+          blobUrl = URL.createObjectURL(await ttsRes.blob());
         }
-        const blob = new Blob([bytes], { type: mimeType || 'audio/wav' });
-        const url = URL.createObjectURL(blob);
-        activeObjectUrlRef.current = url;
 
+        activeObjectUrlRef.current = blobUrl;
         const audio = audioPlayerRef.current || new Audio();
         audioPlayerRef.current = audio;
-        audio.src = url;
-
+        audio.src = blobUrl;
         audio.onended = () => {
           if (activeObjectUrlRef.current) {
             URL.revokeObjectURL(activeObjectUrlRef.current);
             activeObjectUrlRef.current = null;
           }
-          if (liveCallRef.current) {
-            beginListeningTurn(false);
-          } else {
-            updateState('IDLE');
-          }
+          if (liveCallRef.current) beginListeningTurn(false);
+          else updateState('IDLE');
         };
-
         audio.onerror = () => {
-          speakWithBrowserFallback(fallbackText);
+          if (!speakFast(text) && liveCallRef.current) beginListeningTurn(false);
         };
 
         updateState('SPEAKING');
         await audio.play();
       } catch {
-        speakWithBrowserFallback(fallbackText);
+        if (!speakFast(text)) {
+          if (liveCallRef.current) beginListeningTurn(false);
+          else updateState('IDLE');
+        }
       }
     },
-    [beginListeningTurn, speakWithBrowserFallback, stopPlayback, updateState]
+    [beginListeningTurn, language, speakFast, stopPlayback, updateState]
   );
 
   const sendVoiceTurn = async (audioBlob: Blob) => {
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
+
     abortControllerRef.current?.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
+
+    // Check if browser can speak this language instantaneously; if so, skip 15s server TTS wait
+    const hasInstantVoice =
+      typeof window !== 'undefined' &&
+      'speechSynthesis' in window &&
+      (language === 'en' ||
+        window.speechSynthesis
+          .getVoices()
+          .some((v) => v.lang.toLowerCase().startsWith(language === 'hi' ? 'hi' : language)));
 
     try {
       updateState('PROCESSING');
@@ -210,6 +239,7 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
       const formData = new FormData();
       formData.append('audio', audioBlob, 'utterance.webm');
       formData.append('language', language);
+      formData.append('include_audio', hasInstantVoice ? 'false' : 'true');
       if (conversationIdRef.current) {
         formData.append('conversation_id', conversationIdRef.current);
       }
@@ -221,7 +251,8 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
       });
 
       if (!res.ok) {
-        throw new Error('Voice turn failed');
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Server error (${res.status})`);
       }
 
       const data = await res.json();
@@ -238,60 +269,43 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
         { role: 'assistant', text: data.response_text, sources: data.sources || [] },
       ]);
 
-      await playAudioBase64(data.audio_base64, data.audio_mime_type, data.response_text);
+      isSendingRef.current = false;
+      if (hasInstantVoice && speakFast(data.response_text)) {
+        return;
+      }
+      await playServerAudioOrFallback(data.response_text, data.audio_base64, data.audio_mime_type);
     } catch (err: any) {
+      isSendingRef.current = false;
       if (err?.name === 'AbortError') {
         return;
       }
       console.error(err);
-      setErrorMsg('Connection issue — please speak again.');
+      setErrorMsg(err?.message || 'Connection issue — retrying listening.');
       if (liveCallRef.current) {
-        beginListeningTurn(false);
+        // Back off 1.5s on error so we never flood the API
+        setTimeout(() => {
+          if (liveCallRef.current && stateRef.current !== 'LISTENING') {
+            beginListeningTurn(false);
+          }
+        }, 1500);
       } else {
         updateState('ERROR');
       }
+    } finally {
+      isSendingRef.current = false;
     }
   };
 
   const playTTS = useCallback(
     async (text: string) => {
-      try {
-        stopPlayback();
-        updateState('PROCESSING');
-        const ttsRes = await fetch('/api/voice/synthesize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, language }),
-        });
-        if (!ttsRes.ok) throw new Error('TTS failed');
-        const blob = await ttsRes.blob();
-        const url = URL.createObjectURL(blob);
-        activeObjectUrlRef.current = url;
-
-        const audio = audioPlayerRef.current || new Audio();
-        audioPlayerRef.current = audio;
-        audio.src = url;
-        audio.onended = () => {
-          if (activeObjectUrlRef.current) {
-            URL.revokeObjectURL(activeObjectUrlRef.current);
-            activeObjectUrlRef.current = null;
-          }
-          if (liveCallRef.current) beginListeningTurn(false);
-          else updateState('IDLE');
-        };
-        audio.onerror = () => speakWithBrowserFallback(text);
-
-        updateState('SPEAKING');
-        await audio.play();
-      } catch {
-        speakWithBrowserFallback(text);
-      }
+      await playServerAudioOrFallback(text, null, null);
     },
-    [beginListeningTurn, language, speakWithBrowserFallback, stopPlayback, updateState]
+    [playServerAudioOrFallback]
   );
 
   const endLiveCall = useCallback(() => {
     liveCallRef.current = false;
+    isSendingRef.current = false;
     setIsLiveCall(false);
     setIsUserSpeaking(false);
     setMicLevel(0);
@@ -324,13 +338,16 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
   const startLiveCall = useCallback(async () => {
     setErrorMsg('');
     try {
-      // Unlock browser audio autoplay inside user click gesture
       if (!audioPlayerRef.current) {
         audioPlayerRef.current = new Audio();
       }
       audioPlayerRef.current.src =
         'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
       audioPlayerRef.current.play().catch(() => {});
+
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.getVoices();
+      }
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -354,6 +371,7 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
       source.connect(analyser);
       analyserRef.current = analyser;
 
+      noiseFloorRef.current = 0.01;
       liveCallRef.current = true;
       setIsLiveCall(true);
       beginListeningTurn(false);
@@ -374,7 +392,13 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
         const curState = stateRef.current;
 
         if (curState === 'LISTENING') {
-          if (rms > SPEECH_THRESHOLD) {
+          if (!speechActiveRef.current) {
+            // Smooth ambient noise floor adaptation when user is silent
+            noiseFloorRef.current = noiseFloorRef.current * 0.92 + rms * 0.08;
+          }
+          const dynamicSpeechThreshold = Math.max(MIN_SPEECH_THRESHOLD, noiseFloorRef.current * 2.4);
+
+          if (rms > dynamicSpeechThreshold) {
             if (!speechActiveRef.current) {
               speechActiveRef.current = true;
               speechStartedAtRef.current = now;
@@ -393,7 +417,6 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
               }
             }
           } else if (now - recorderStartedAtRef.current >= SILENT_CYCLE_MS) {
-            // Recycle idle lead-in buffer so first word isn't delayed by long silence
             beginListeningTurn(false);
           }
 
@@ -403,12 +426,13 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
             stopActiveRecorder(false);
           }
         } else if (curState === 'SPEAKING' || curState === 'PROCESSING') {
-          // Barge-in interruption detection
-          if (rms > BARGE_IN_THRESHOLD) {
+          const bargeInThreshold = Math.max(0.055, noiseFloorRef.current * BARGE_IN_MULTIPLIER);
+          if (rms > bargeInThreshold) {
             if (bargeInStartedAtRef.current === 0) {
               bargeInStartedAtRef.current = now;
             } else if (now - bargeInStartedAtRef.current >= BARGE_IN_HOLD_MS) {
               bargeInStartedAtRef.current = 0;
+              isSendingRef.current = false;
               abortControllerRef.current?.abort();
               stopPlayback();
               speechActiveRef.current = true;

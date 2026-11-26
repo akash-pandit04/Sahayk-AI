@@ -86,6 +86,26 @@ class AssistantOrchestrator:
 
         intent = extraction.get("intent", "GENERAL_QUESTION")
 
+        # Fast-path pure greetings, identity questions, and out-of-scope chat without attaching scheme sources
+        if intent in ("GREETING", "IDENTITY", "OUT_OF_SCOPE"):
+            response_text = await self.llm_provider.generate_response(
+                message,
+                {
+                    "profile": session.profile_data,
+                    "retrieved_schemes": [],
+                    "language": language,
+                    "intent": intent,
+                },
+            )
+            return {
+                "conversation_id": session.session_id,
+                "intent": intent,
+                "response_text": response_text,
+                "missing_fields": [],
+                "scheme_results": [],
+                "sources": [],
+            }
+
         # 4. Retrieval (Only Published Schemes)
         candidate_schemes = await self.retrieval_service.search_schemes(message, limit=5, query_vector=query_vector)
         
@@ -132,7 +152,8 @@ class AssistantOrchestrator:
         context = {
             "profile": session.profile_data,
             "retrieved_schemes": context_schemes,
-            "language": language
+            "language": language,
+            "intent": intent,
         }
         
         # 7. Generate Validated Response

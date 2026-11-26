@@ -89,11 +89,12 @@ async def synthesize_speech(
         raise HTTPException(status_code=500, detail="Speech synthesis service failed.")
 
 
-@router.post("/turn", dependencies=[Depends(rate_limit(requests=20, window=60))])
+@router.post("/turn", dependencies=[Depends(rate_limit(requests=60, window=60))])
 async def voice_conversation_turn(
     request: Request,
     language: str = Form("hi"),
     conversation_id: Optional[str] = Form(None),
+    include_audio: bool = Form(True),
     audio: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -134,14 +135,15 @@ async def voice_conversation_turn(
         language=language,
     )
 
-    # 3. TTS (best-effort so text is still returned if TTS is slow/unavailable)
+    # 3. TTS (optional when client uses instant browser speech synthesis)
     audio_b64: Optional[str] = None
-    try:
-        tts_provider = get_tts_provider()
-        wav_bytes = await tts_provider.synthesize(result["response_text"], language)
-        audio_b64 = base64.b64encode(wav_bytes).decode("utf-8")
-    except Exception as e:
-        logging.warning(f"Voice turn TTS fallback (returning text only): {e}")
+    if include_audio:
+        try:
+            tts_provider = get_tts_provider()
+            wav_bytes = await tts_provider.synthesize(result["response_text"], language)
+            audio_b64 = base64.b64encode(wav_bytes).decode("utf-8")
+        except Exception as e:
+            logging.warning(f"Voice turn TTS fallback (returning text only): {e}")
 
     return {
         "conversation_id": result["conversation_id"],

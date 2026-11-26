@@ -36,10 +36,9 @@ class GeminiSTTProvider(STTProvider):
 
     def __init__(self, api_key: str, model: str | None = None):
         self.api_key = api_key
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+        self.model = model or os.getenv("GEMINI_STT_MODEL", "gemini-3.5-flash-lite")
 
     async def transcribe(self, audio_bytes: bytes, language: str) -> str:
-        url = f"{GEMINI_API_BASE}/{self.model}:generateContent"
         mime_type = _detect_audio_mime(audio_bytes)
         audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
 
@@ -59,13 +58,32 @@ class GeminiSTTProvider(STTProvider):
             ]
         }
         headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
+        candidates = [self.model]
+        for fallback in ("gemini-3.5-flash-lite", "gemini-3.5-transcribe", "gemini-3.1-flash-lite"):
+            if fallback not in candidates:
+                candidates.append(fallback)
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        last_err: Exception | None = None
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            for model_name in candidates:
+                url = f"{GEMINI_API_BASE}/{model_name}:generateContent"
+                try:
+                    resp = await client.post(url, json=payload, headers=headers)
+                    if resp.status_code in (404, 429, 503):
+                        last_err = httpx.HTTPStatusError(
+                            f"{resp.status_code} for {model_name}", request=resp.request, response=resp
+                        )
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
+                    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                except (httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+                    last_err = e
+                    continue
 
-        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        if last_err:
+            raise last_err
+        raise RuntimeError("No Gemini STT model succeeded")
 
 
 class GeminiTTSProvider(TTSProvider):
