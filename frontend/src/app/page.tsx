@@ -58,22 +58,11 @@ function VoiceInterface({
   const t = translations[language as keyof typeof translations] || translations.hi;
   const historyEndRef = useRef<HTMLDivElement | null>(null);
   const [voiceId, setVoiceId] = useState<string>("gemini:Kore");
-  const [browserVoices, setBrowserVoices] = useState<Array<{ id: string; label: string }>>([]);
 
   useEffect(() => {
     const savedVoice = localStorage.getItem("sahayak_voice_v2");
-    if (savedVoice) setVoiceId(savedVoice);
-
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      const loadVoices = () => {
-        const list = window.speechSynthesis
-          .getVoices()
-          .filter((v) => v.lang.toLowerCase().startsWith("hi") || v.lang.toLowerCase().startsWith("en-in"))
-          .map((v) => ({ id: `browser:${v.voiceURI}`, label: `Fast Browser: ${v.name}` }));
-        setBrowserVoices(list);
-      };
-      loadVoices();
-      window.speechSynthesis.onvoiceschanged = loadVoices;
+    if (savedVoice && GEMINI_VOICES.some((v) => v.id === savedVoice)) {
+      setVoiceId(savedVoice);
     }
   }, []);
 
@@ -148,11 +137,6 @@ function VoiceInterface({
             aria-label="Select Voice"
           >
             {GEMINI_VOICES.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label}
-              </option>
-            ))}
-            {browserVoices.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.label}
               </option>

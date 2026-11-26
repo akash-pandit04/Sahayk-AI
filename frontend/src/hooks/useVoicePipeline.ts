@@ -161,15 +161,7 @@ export function useVoicePipeline({ language, voiceId = 'gemini:Kore' }: UseVoice
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
         return false;
       }
-      const voices = window.speechSynthesis.getVoices();
-      let selectedVoice: SpeechSynthesisVoice | null = null;
-      if (voiceId.startsWith('browser:')) {
-        const uri = voiceId.slice('browser:'.length);
-        selectedVoice = voices.find((v) => v.voiceURI === uri) || null;
-      }
-      if (!selectedVoice) {
-        selectedVoice = selectHindiFemaleVoice();
-      }
+      const selectedVoice = selectHindiFemaleVoice();
       if (!selectedVoice) {
         return false;
       }
@@ -193,7 +185,7 @@ export function useVoicePipeline({ language, voiceId = 'gemini:Kore' }: UseVoice
       window.speechSynthesis.speak(utter);
       return true;
     },
-    [beginListeningTurn, selectHindiFemaleVoice, updateState, voiceId]
+    [beginListeningTurn, selectHindiFemaleVoice, updateState]
   );
 
   const playServerAudioOrFallback = useCallback(
@@ -253,7 +245,6 @@ export function useVoicePipeline({ language, voiceId = 'gemini:Kore' }: UseVoice
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    const useBrowserVoice = voiceId.startsWith('browser:') && typeof window !== 'undefined' && 'speechSynthesis' in window;
     const geminiVoiceName = voiceId.startsWith('gemini:') ? voiceId.slice('gemini:'.length) : 'Kore';
 
     try {
@@ -263,7 +254,7 @@ export function useVoicePipeline({ language, voiceId = 'gemini:Kore' }: UseVoice
       const formData = new FormData();
       formData.append('audio', audioBlob, 'utterance.webm');
       formData.append('language', language);
-      formData.append('include_audio', useBrowserVoice ? 'false' : 'true');
+      formData.append('include_audio', 'true');
       formData.append('voice_name', geminiVoiceName);
       if (conversationIdRef.current) {
         formData.append('conversation_id', conversationIdRef.current);
@@ -295,9 +286,6 @@ export function useVoicePipeline({ language, voiceId = 'gemini:Kore' }: UseVoice
       ]);
 
       isSendingRef.current = false;
-      if (useBrowserVoice && speakFast(data.response_text)) {
-        return;
-      }
       await playServerAudioOrFallback(data.response_text, data.audio_base64, data.audio_mime_type);
     } catch (err: any) {
       isSendingRef.current = false;
@@ -323,12 +311,9 @@ export function useVoicePipeline({ language, voiceId = 'gemini:Kore' }: UseVoice
 
   const playTTS = useCallback(
     async (text: string) => {
-      if (voiceId.startsWith('browser:') && speakFast(text)) {
-        return;
-      }
       await playServerAudioOrFallback(text, null, null);
     },
-    [playServerAudioOrFallback, speakFast, voiceId]
+    [playServerAudioOrFallback]
   );
 
   const endLiveCall = useCallback(() => {
