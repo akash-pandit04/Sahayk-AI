@@ -42,8 +42,20 @@ async def test_gemini_llm_and_embedding():
         extracted = await llm.extract_intent_and_profile("I am 65", {})
         assert extracted["profile_updates"]["age"] == 65
 
-        answer = await llm.generate_response("What scheme?", {"retrieved_schemes": [], "language": "en"})
+        answer = await llm.generate_response(
+            "What scheme?",
+            {
+                "retrieved_schemes": [],
+                "language": "en",
+                "intent": "GENERAL_CHAT",
+                "history": [{"role": "user", "text": "Can you hear me?"}, {"role": "assistant", "text": "Yes!"}],
+            },
+        )
         assert "IGNOAPS" in answer
+        # Verify multi-turn history was forwarded in Gemini contents payload
+        sent_payload = mock_client.post.call_args_list[1].kwargs["json"]
+        assert len(sent_payload["contents"]) == 3
+        assert sent_payload["contents"][0]["parts"][0]["text"] == "Can you hear me?"
 
         emb = GeminiEmbeddingProvider(api_key="gem-key")
         vec = await emb.generate_embedding("Old age pension")

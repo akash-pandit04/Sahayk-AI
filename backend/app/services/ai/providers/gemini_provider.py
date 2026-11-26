@@ -1,6 +1,6 @@
 import json
 import os
-from typing import List
+from typing import List, Optional
 
 import httpx
 
@@ -14,10 +14,24 @@ class GeminiLLMProvider(LLMProvider):
         self.api_key = api_key
         self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
-    async def _generate(self, system_instruction: str, user_text: str, json_mode: bool = False) -> str:
+    async def _generate(
+        self,
+        system_instruction: str,
+        user_text: str,
+        json_mode: bool = False,
+        history: Optional[List[dict]] = None,
+    ) -> str:
+        contents = []
+        for turn in history or []:
+            role = "model" if turn.get("role") == "assistant" else "user"
+            text = (turn.get("text") or "").strip()
+            if text:
+                contents.append({"role": role, "parts": [{"text": text}]})
+        contents.append({"role": "user", "parts": [{"text": user_text}]})
+
         payload: dict = {
             "systemInstruction": {"parts": [{"text": system_instruction}]},
-            "contents": [{"role": "user", "parts": [{"text": user_text}]}],
+            "contents": contents,
         }
         if json_mode:
             payload["generationConfig"] = {"responseMimeType": "application/json"}
@@ -51,55 +65,54 @@ class GeminiLLMProvider(LLMProvider):
         raise RuntimeError("No Gemini model succeeded")
 
     async def extract_intent_and_profile(self, user_message: str, current_profile: dict) -> dict:
+        clean_profile = {k: v for k, v in (current_profile or {}).items() if not k.startswith("_")}
+        history = (current_profile or {}).get("_chat_history", [])[-6:]
         system_prompt = (
-            "Classify the citizen's intent into one of: GREETING, IDENTITY, OUT_OF_SCOPE, FIND_SCHEME, SCHEME_INFO. "
-            "Use GREETING for hello/hi/namaste, IDENTITY for 'what is your name/who are you', OUT_OF_SCOPE for non-scheme topics (weather, coding, sports, etc.), and FIND_SCHEME/SCHEME_INFO for government schemes or personal eligibility info. "
-            "Also extract demographic/eligibility profile attributes (age, gender, state, occupation, bpl_status, income_group, location_type, owns_pucca_house, has_agricultural_land). "
+            "Classify the user's latest message into one intent: "
+            "SCHEME_QUERY (asking about government schemes, welfare, pensions, subsidies, scholarships, health insurance, housing, farming aid, eligibility, or sharing personal age/income/occupation/location for schemes) "
+            "OR GENERAL_CHAT (greetings, mic checks like 'can you hear me?', follow-up conversation, general knowledge, everyday questions, asking who you are, or general chat). "
+            "Also extract any eligibility profile attributes if mentioned (age, gender, state, occupation, bpl_status, income_group, location_type, owns_pucca_house, has_agricultural_land). "
             "Never collect PII (Aadhaar, PAN, phone, email). "
-            'Return ONLY valid JSON: {"intent": "str", "profile_updates": {}, "missing_fields": []}.'
+            'Return ONLY valid JSON: {"intent": "SCHEME_QUERY|GENERAL_CHAT", "profile_updates": {}, "missing_fields": []}.'
         )
-        user_prompt = f"Current Profile: {json.dumps(current_profile)}\nUser Message: {user_message}"
-        content = await self._generate(system_prompt, user_prompt, json_mode=True)
+        user_prompt = f"Current Profile: {json.dumps(clean_profile)}\nLatest User Message: {user_message}"
+        content = await self._generate(system_prompt, user_prompt, json_mode=True, history=history)
         return json.loads(content)
 
     async def generate_response(self, user_message: str, context: dict) -> str:
         language = context.get("language", "en")
-        intent = context.get("intent", "FIND_SCHEME")
+        intent = context.get("intent", "SCHEME_QUERY")
+        history = context.get("history", [])
 
-        if intent in ("GREETING", "IDENTITY"):
+        if intent == "GENERAL_CHAT":
             system_prompt = (
-                f"You are Sahayak AI, a friendly voice assistant that helps citizens of India discover verified Government of India welfare schemes. "
-                f"Respond warmly in language code '{language}' in 1 to 2 short plain-text spoken sentences (no markdown). "
-                "Introduce yourself as Sahayak AI and invite them to ask about government schemes or tell you their age/occupation."
+                f"You are Sahayak AI, a warm, intelligent, natural conversational voice assistant (like Gemini or ChatGPT) "
+                f"who can chat naturally on any topic and also specializes in Indian government welfare schemes.\n"
+                f"INSTRUCTIONS:\n"
+                f"- Answer the user's exact question directly and contextually using the conversation history.\n"
+                f"- For example, if they ask 'Can you hear me?', confirm naturally ('Yes, I can hear you clearly! How can I help?'). If they ask general questions, answer helpfully and ask a relevant follow-up or cross-question to keep the conversation natural.\n"
+                f"- Respond in language code '{language}' in concise spoken plain text (2 to 4 short sentences, NO markdown asterisks, bullets, or headings).\n"
+                f"- Do NOT claim specific government scheme eligibility amounts or official URLs unless verified scheme data was provided."
             )
-            return await self._generate(system_prompt, user_message, json_mode=False)
-
-        if intent == "OUT_OF_SCOPE":
-            system_prompt = (
-                f"You are Sahayak AI, a dedicated assistant ONLY for Government of India welfare schemes. "
-                f"Politely explain in language code '{language}' in 1 to 2 short plain-text spoken sentences (no markdown) "
-                "that you only help with government welfare schemes and eligibility, and ask how you can help with a scheme."
-            )
-            return await self._generate(system_prompt, user_message, json_mode=False)
+            return await self._generate(system_prompt, user_message, json_mode=False, history=history)
 
         system_prompt = f"""SYSTEM INSTRUCTIONS:
-You are Sahayak AI, a live voice assistant helping citizens of India find government welfare schemes.
+You are Sahayak AI, a natural, intelligent voice assistant helping citizens of India with government welfare schemes.
 
 CRITICAL HIERARCHY OF TRUTH:
-1. DETERMINISTIC ELIGIBILITY RESULT (`eligibility_status` inside each retrieved scheme): This is the absolute truth. Never override it. If status is NOT_ELIGIBLE, do not claim eligibility. If status is INSUFFICIENT_INFORMATION, ask concisely for `missing_information`.
-2. RETRIEVED VERIFIED CONTEXT: Use ONLY the verified scheme records below.
+1. DETERMINISTIC ELIGIBILITY RESULT (`eligibility_status` inside each retrieved scheme): This is the absolute truth. Never override it. If status is NOT_ELIGIBLE, do not claim eligibility. If status is INSUFFICIENT_INFORMATION, ask a natural cross-question for `missing_information`.
+2. RETRIEVED VERIFIED CONTEXT: Use ONLY the verified scheme records below for scheme facts, benefits, and URLs.
 
-VOICE & RESPONSE RULES:
-- Respond in language code '{language}' in a warm, simple, spoken conversational style.
-- Keep it concise for live voice output: 2 to 3 short sentences (under 60 words total).
-- Output plain spoken text ONLY: NO markdown asterisks (**), NO bullet points, NO numbered lists, NO headings.
-- Focus primarily on schemes with status POTENTIALLY_ELIGIBLE. If none are POTENTIALLY_ELIGIBLE yet, ask 1 short follow-up question for the most important missing information (such as age, occupation, income/BPL status, or urban/rural housing).
-- Never invent schemes, benefits, rules, or URLs. Never say "You are definitely approved"; briefly note that final approval rests with the government department.
+VOICE & CONVERSATION RULES:
+- Use the conversation history naturally so follow-ups and clarifications feel like a real human dialogue.
+- Respond in language code '{language}' in concise spoken plain text (2 to 4 short sentences, NO markdown **, bullets, or headings).
+- Focus primarily on schemes with status POTENTIALLY_ELIGIBLE. If none are POTENTIALLY_ELIGIBLE yet, ask 1 natural cross-question for the missing information (e.g., age, occupation, BPL/income status, urban/rural housing).
+- Never invent schemes, benefits, rules, or URLs. Never say "You are definitely approved"; note briefly that final approval rests with the concerned government department.
 
 RETRIEVED VERIFIED SCHEMES:
 {json.dumps(context.get("retrieved_schemes", []))}
 """
-        return await self._generate(system_prompt, user_message, json_mode=False)
+        return await self._generate(system_prompt, user_message, json_mode=False, history=history)
 
 
 class GeminiEmbeddingProvider(EmbeddingProvider):
