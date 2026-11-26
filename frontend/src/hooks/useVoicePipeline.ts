@@ -132,24 +132,45 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
     [stopActiveRecorder, updateState]
   );
 
+  const selectHindiFemaleVoice = useCallback((): SpeechSynthesisVoice | null => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return null;
+    }
+    const voices = window.speechSynthesis.getVoices();
+    const hindiVoices = voices.filter((v) => v.lang.toLowerCase().startsWith('hi'));
+    if (hindiVoices.length === 0) {
+      return null;
+    }
+
+    const femaleHints = ['swara', 'kalpana', 'heera', 'lekha', 'google हिन्दी', 'hindi', 'female', 'woman'];
+    const maleHints = ['madhur', 'hemant', 'prabhat', 'male', 'man'];
+
+    const preferredFemale = hindiVoices.find((v) => {
+      const name = v.name.toLowerCase();
+      return femaleHints.some((h) => name.includes(h)) && !maleHints.some((m) => name.includes(m));
+    });
+    if (preferredFemale) return preferredFemale;
+
+    const nonMale = hindiVoices.find((v) => !maleHints.some((m) => v.name.toLowerCase().includes(m)));
+    return nonMale || hindiVoices[0];
+  }, []);
+
   const speakFast = useCallback(
     (text: string): boolean => {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
         return false;
       }
-      const targetPrefix = language === 'hi' ? 'hi' : language === 'ta' ? 'ta' : language === 'te' ? 'te' : 'en';
-      const voices = window.speechSynthesis.getVoices();
-      const matchedVoice = voices.find((v) => v.lang.toLowerCase().startsWith(targetPrefix));
-      // If browser has no voice for this language, return false so Gemini TTS handles it
-      if (voices.length > 0 && !matchedVoice && targetPrefix !== 'en') {
+      const hindiFemaleVoice = selectHindiFemaleVoice();
+      // Only use instant browser speech if a Hindi voice is available so voice stays consistent everywhere
+      if (!hindiFemaleVoice) {
         return false;
       }
 
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = language === 'hi' ? 'hi-IN' : language === 'ta' ? 'ta-IN' : language === 'te' ? 'te-IN' : 'en-IN';
-      if (matchedVoice) utter.voice = matchedVoice;
-      utter.rate = 1.03;
+      utter.voice = hindiFemaleVoice;
+      utter.lang = hindiFemaleVoice.lang || 'hi-IN';
+      utter.rate = 1.02;
 
       utter.onend = () => {
         if (liveCallRef.current) beginListeningTurn(false);
@@ -164,7 +185,7 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
       window.speechSynthesis.speak(utter);
       return true;
     },
-    [beginListeningTurn, language, updateState]
+    [beginListeningTurn, selectHindiFemaleVoice, updateState]
   );
 
   const playServerAudioOrFallback = useCallback(
@@ -223,14 +244,8 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    // Check if browser can speak this language instantaneously; if so, skip 15s server TTS wait
-    const hasInstantVoice =
-      typeof window !== 'undefined' &&
-      'speechSynthesis' in window &&
-      (language === 'en' ||
-        window.speechSynthesis
-          .getVoices()
-          .some((v) => v.lang.toLowerCase().startsWith(language === 'hi' ? 'hi' : language)));
+    // Use instant browser Hindi female voice when available; otherwise use Gemini TTS (Kore)
+    const hasInstantVoice = Boolean(selectHindiFemaleVoice());
 
     try {
       updateState('PROCESSING');

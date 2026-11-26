@@ -92,14 +92,19 @@ class GeminiTTSProvider(TTSProvider):
     def __init__(self, api_key: str, model: str | None = None, voice_name: str = "Kore"):
         self.api_key = api_key
         self.model = model or os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-lite-tts")
-        self.voice_name = voice_name
+        self.voice_name = os.getenv("GEMINI_TTS_VOICE", voice_name)
 
     async def synthesize(self, text: str, language: str) -> bytes:
         payload = {
             "contents": [
                 {
                     "parts": [
-                        {"text": f"Read aloud naturally and clearly in language '{language}': {text}"}
+                        {
+                            "text": (
+                                "Read the following text aloud naturally using a warm, clear Indian Hindi female voice persona "
+                                f"(consistent Hindi woman voice regardless of script/language '{language}'): {text}"
+                            )
+                        }
                     ]
                 }
             ],
