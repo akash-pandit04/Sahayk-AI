@@ -112,14 +112,32 @@ async def test_gemini_stt_and_tts_pcm_to_wav():
 def test_gemini_factories():
     with patch.dict(
         os.environ,
-        {
-            "GEMINI_API_KEY": "gem-key",
-            "VOICE_STT_PROVIDER": "gemini",
-            "VOICE_TTS_PROVIDER": "gemini",
-        },
+        {"VOICE_STT_PROVIDER": "gemini", "VOICE_TTS_PROVIDER": "gemini", "GEMINI_API_KEY": "gem-key"},
         clear=False,
     ):
         assert isinstance(get_llm_provider(), GeminiLLMProvider)
         assert isinstance(get_embedding_provider(), GeminiEmbeddingProvider)
         assert isinstance(get_stt_provider(), GeminiSTTProvider)
         assert isinstance(get_tts_provider(), GeminiTTSProvider)
+
+
+def test_identity_and_creator_filter(client):
+    res_name = client.post("/api/v1/assistant/query", json={"message": "What is your name?", "language": "en"})
+    assert res_name.status_code == 200
+    assert "I am Sahayak AI" in res_name.json()["response_text"]
+    assert res_name.json()["sources"] == []
+
+    res_creator = client.post("/api/v1/assistant/query", json={"message": "Who made you?", "language": "en"})
+    assert res_creator.status_code == 200
+    body = res_creator.json()["response_text"]
+    for member in [
+        "Akash Pandit",
+        "Abhishek Mishra",
+        "Patel Swastik Surya",
+        "Shakya Jay Jitendra",
+        "Veer Patangiya",
+        "Upendra Gupta",
+        "EPICS (Engineering Project in Community Service)",
+    ]:
+        assert member in body
+    assert "Google" not in body

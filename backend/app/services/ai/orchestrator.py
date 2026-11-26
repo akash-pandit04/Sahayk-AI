@@ -17,6 +17,40 @@ _AADHAAR_RE = re.compile(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b")
 _PHONE_RE = re.compile(r"\b(?:\+91[\s-]?)?[6-9]\d{9}\b")
 _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
+_CREATOR_QUERY_RE = re.compile(
+    r"(who\s+(made|created|built|developed|trained)\s+you|"
+    r"who\s+(are|is)\s+your\s+(creator|creators|developer|developers|maker|makers|team)|"
+    r"made\s+by\s+google|created\s+by\s+google|"
+    r"kisne\s+banaya|किसने\s+बनाया|बनाया\s+है|निर्माता)",
+    re.IGNORECASE,
+)
+_NAME_QUERY_RE = re.compile(
+    r"(what\s+is\s+your\s+name|what's\s+your\s+name|who\s+are\s+you|tell\s+me\s+your\s+name|"
+    r"tumhara\s+naam|aapka\s+naam|तुम्हारा\s+नाम|आपका\s+नाम|आप\s+कौन\s+हैं)",
+    re.IGNORECASE,
+)
+
+
+def _match_identity_filter(message: str, language: str) -> str | None:
+    """Deterministic filter for creator and assistant name queries."""
+    if _CREATOR_QUERY_RE.search(message):
+        if language == "hi":
+            return (
+                "मैं Sahayak AI हूँ। मुझे Akash Pandit, Abhishek Mishra, Patel Swastik Surya, "
+                "Shakya Jay Jitendra, Veer Patangiya, और Upendra Gupta की पूरी टीम ने मिलकर "
+                "EPICS (Engineering Project in Community Service) प्रोजेक्ट के लिए बनाया है।"
+            )
+        return (
+            "I am Sahayak AI. I have been made by Akash Pandit, Abhishek Mishra, Patel Swastik Surya, "
+            "Shakya Jay Jitendra, Veer Patangiya, and Upendra Gupta together for the project called "
+            "EPICS (Engineering Project in Community Service)."
+        )
+    if _NAME_QUERY_RE.search(message):
+        if language == "hi":
+            return "मैं Sahayak AI हूँ, आपका लाइव वॉयस सहायक। बताइए, आज मैं आपकी क्या मदद कर सकता हूँ?"
+        return "I am Sahayak AI, your live voice assistant. How can I help you today?"
+    return None
+
 
 def sanitize_profile_updates(updates: dict) -> dict:
     """Enforce data minimization by dropping PII keys and scrubbing sensitive patterns."""
@@ -91,6 +125,19 @@ class AssistantOrchestrator:
         raw_profile = dict(session.profile_data or {})
         history = list(raw_profile.get("_chat_history", []))
         eval_profile = {k: v for k, v in raw_profile.items() if not k.startswith("_")}
+
+        # Deterministic identity/creator filter
+        identity_reply = _match_identity_filter(message, language)
+        if identity_reply is not None:
+            self.append_conversation_turn(session, message, identity_reply)
+            return {
+                "conversation_id": session.session_id,
+                "intent": "IDENTITY",
+                "response_text": identity_reply,
+                "missing_fields": [],
+                "scheme_results": [],
+                "sources": [],
+            }
 
         # 2. Extract Intent/Profile & Embed Query in parallel to minimize latency
         if self.db.bind.dialect.name == "sqlite":
