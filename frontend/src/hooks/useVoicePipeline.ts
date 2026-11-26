@@ -71,7 +71,7 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
       formData.append('language', language);
       if (conversationId) formData.append('conversation_id', conversationId);
 
-      const sttRes = await fetch(process.env.NEXT_PUBLIC_API_URL + '/voice/transcribe', {
+      const sttRes = await fetch('/api/voice/transcribe', {
         method: 'POST',
         body: formData
       });
@@ -84,7 +84,7 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
       setHistory(prev => [...prev, { role: 'user', text: userText }]);
 
       // 2. Assistant API
-      const aiRes = await fetch(process.env.NEXT_PUBLIC_API_URL + '/assistant/query', {
+      const aiRes = await fetch('/api/assistant/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -117,7 +117,7 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
   const playTTS = async (text: string) => {
     try {
       setState('PROCESSING');
-      const ttsRes = await fetch(process.env.NEXT_PUBLIC_API_URL + '/voice/synthesize', {
+      const ttsRes = await fetch('/api/voice/synthesize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, language })

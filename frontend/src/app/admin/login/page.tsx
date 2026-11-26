@@ -47,7 +47,7 @@ export default function LoginPage() {
               id="email"
               name="email"
               required
-              defaultValue="admin@sahayak.local"
+              placeholder="admin@sahayak.local"
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
           </div>
@@ -61,7 +61,7 @@ export default function LoginPage() {
               id="password"
               name="password"
               required
-              defaultValue="adminpassword"
+              placeholder="Enter password"
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
           </div>

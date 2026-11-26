@@ -13,6 +13,8 @@ Copy `.env.example` to `.env` and set **non-default** production values:
 - `OPENAI_API_KEY`: Required when `ENVIRONMENT=production`
 - `VOICE_STT_PROVIDER=openai` (or `bhashini`) — `mock` is blocked at startup in production
 - `VOICE_TTS_PROVIDER=openai` (or `bhashini`) — `mock` is blocked at startup in production
+- `BHASHINI_API_KEY`, `BHASHINI_USER_ID`, `BHASHINI_PIPELINE_URL`: Required if using `bhashini` voice providers
+- `COOKIE_SECURE=true` when serving behind HTTPS/TLS
 - `CORS_ORIGINS`: Exact production origin(s), e.g. `["https://sahayak.example.org"]`
 - `SESSION_RETENTION_DAYS=7`
 

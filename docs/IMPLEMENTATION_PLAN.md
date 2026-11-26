@@ -1,47 +1,37 @@
 # Sahayak AI - Implementation Plan
 
-## Phase 0: Discovery & Architecture (CURRENT)
-*   [x] Analyze requirements and constraints.
-*   [x] Establish architecture guidelines.
-*   [x] Design database schema.
-*   [x] Draft documentation.
-
 ## Phase 1: Infrastructure & Backend Foundation
-*   Initialize Git repository.
-*   Setup Docker Compose (PostgreSQL + pgvector).
-*   Initialize Python FastAPI project (Poetry/Pipenv).
-*   Configure SQLAlchemy, Alembic, and create initial DB migrations based on `DATABASE_DESIGN.md`.
-*   Implement JWT Authentication logic for Admin.
+*   [x] Setup Docker Compose (PostgreSQL 16 + `pgvector`, FastAPI API, Next.js frontend).
+*   [x] Configure SQLAlchemy 2.x, Alembic migrations, health checks, and structured logging.
+*   [x] Implement JWT authentication and bcrypt password hashing for Admin access.
 
 ## Phase 2: Admin Dashboard API & Frontend
-*   **Backend:** Build CRUD REST APIs for Schemes, Rules, Sources, and Categories.
-*   **Backend:** Implement Audit Logging middleware.
-*   **Frontend:** Initialize Next.js project.
-*   **Frontend:** Build Admin Login and Dashboard UI.
-*   **Frontend:** Build Scheme Management interfaces (Forms for creating schemes, adding eligibility rules).
+*   [x] Build CRUD REST APIs for Schemes, Rules, Benefits, Documents, Steps, Sources, and Categories.
+*   [x] Implement Audit Logging (`audit_logs`) on administrative mutations.
+*   [x] Initialize Next.js App Router frontend with cookie-authenticated `/admin` dashboard and scheme editor.
 
-## Phase 3: AI Core & Eligibility Engine
-*   Implement the Python Deterministic Eligibility Engine.
-*   Integrate `pgvector` for semantic search on schemes.
-*   Build the LangChain / LLM pipeline (Intent Extraction -> DB Search -> Eligibility Eval -> Response Generation).
-*   Write unit tests for the deterministic engine to ensure 0% hallucination on rules.
+## Phase 3: AI Core, RAG & Deterministic Eligibility Engine
+*   [x] Implement the Python Deterministic Eligibility Engine (`evaluate_eligibility` with `AND`/`OR` AST logic).
+*   [x] Integrate `pgvector` (`scheme_embeddings`) for semantic search over `PUBLISHED` schemes.
+*   [x] Build `AssistantOrchestrator` (Session Profile -> Intent/Entity Extraction -> Retrieval -> Deterministic Eligibility -> Grounded Response).
 
-## Phase 4: Voice Pipeline Integration
-*   Implement the abstract `VoiceService`.
-*   Integrate STT (Speech-to-Text) provider.
-*   Integrate TTS (Text-to-Speech) provider.
-*   Test multilingual audio in -> text -> processing -> text -> audio out loop.
+## Phase 4: Citizen PWA & Voice Pipeline
+*   [x] Implement abstract `STTProvider` and `TTSProvider` interfaces and factory configuration.
+*   [x] Build mobile-first Citizen PWA (`/`) with `MediaRecorder` voice loop and audio playback.
+*   [x] Add end-to-end voice pipeline tests.
 
-## Phase 5: Citizen Frontend (Voice UI)
-*   Build the mobile-first Next.js Citizen UI.
-*   Implement MediaRecorder for microphone access.
-*   Implement audio streaming playback.
-*   Connect the UI to the backend conversational API.
+## Phase 5: Real Scheme Knowledge Base & Verified Ingestion
+*   [x] Seed verified Government of India welfare schemes (`seed_real_schemes.py`).
+*   [x] Build SSRF-protected URL/PDF ingestion pipeline (`fetcher.py`, `extractor.py`, `normalizer.py`, `IngestionRecord`).
+*   [x] Build `/admin/ingestion` review UI and `/admin/schemes/[id]` source freshness re-check & versioning workflows.
+*   [x] Complete Scenarios A–J integration tests (`test_phase5_scenarios.py`).
 
-## Phase 6: E2E Testing, Data Seeding & Hardening
-*   Seed the database with 3-5 REAL government schemes (e.g., Ayushman Bharat, PM Kisan) using verified government URLs.
-*   Perform E2E tests simulating conversational flows.
+## Phase 6: Security Hardening & Production Preparation
+*   [x] Enforce production startup and factory guardrails (`ENVIRONMENT=production` blocks `mock` providers and weak JWT secrets).
+*   [x] Add HTTP security headers middleware, PII minimization scrubbing, and `purge_expired_sessions.py`.
+*   [x] Implement `OpenAISTTProvider` / `OpenAITTSProvider`, Nginx reverse proxy, `docker-compose.prod.yml`, `DEPLOYMENT.md`, and GitHub Actions CI.
 
-## Phase 7: Deployment Preparation
-*   Finalize environment variable configurations.
-*   Write deployment instructions (Docker, Nginx config).
+## Phase 7: Bhashini Provider, BFF Routing & Live Stack Verification
+*   [x] Implement `BhashiniSTTProvider` and `BhashiniTTSProvider` ULCA inference client.
+*   [x] Route browser voice/assistant requests through Next.js BFF API routes (`/api/voice/*`, `/api/assistant/query`) for seamless Docker & local networking.
+*   [x] Verify full Docker Compose stack (PostgreSQL + `pgvector`, FastAPI, Next.js frontend) end-to-end.

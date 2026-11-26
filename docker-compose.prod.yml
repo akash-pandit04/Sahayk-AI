@@ -40,7 +40,9 @@ services:
     container_name: sahayak_frontend_prod
     restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000/api/v1
+      - INTERNAL_API_URL=http://api:8000/api/v1
+      - NEXT_PUBLIC_API_URL=/api/v1
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
     depends_on:
       - api
 

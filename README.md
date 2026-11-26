@@ -1,55 +1,54 @@
 # Sahayak AI
 
-A multilingual, voice-first AI assistant to help underserved citizens in India discover and navigate Government of India welfare schemes.
+A multilingual, voice-first AI assistant to help underserved citizens in India discover and navigate Government of India welfare schemes using a verified CMS knowledge base, `pgvector` semantic retrieval, and a deterministic eligibility engine.
 
-## Phase 1 Implementation Status
-- [x] Dockerized PostgreSQL with `pgvector`
-- [x] FastAPI Backend Base
-- [x] SQLAlchemy 2.x & Alembic setup
-- [x] Admin Authentication (JWT, bcrypt)
-- [x] Health check endpoints
-- [x] Backend tests
+## Implementation Status
+- [x] **Phase 1 — Infrastructure & Backend Foundation**: Dockerized PostgreSQL 16 + `pgvector`, FastAPI, SQLAlchemy 2.x, Alembic migrations, JWT Admin Auth
+- [x] **Phase 2 — Admin Dashboard & Scheme CMS**: Authenticated Next.js Admin CMS (`/admin`), scheme CRUD, rules, benefits, sources, audit logs
+- [x] **Phase 3 — AI Core, RAG & Deterministic Eligibility**: `pgvector` embeddings (`scheme_embeddings`), AST `rule_logic` engine, grounded orchestrator
+- [x] **Phase 4 — Citizen PWA & Voice Pipeline**: Mobile-first Citizen Voice UI (`/`), BFF voice routes (`/api/voice/*`, `/api/assistant/query`), STT/TTS abstraction
+- [x] **Phase 5 — Real Scheme Knowledge Base & Verified Ingestion**: Human-in-the-loop URL/PDF ingestion (`/admin/ingestion`), SSRF protection, prompt-injection safeguards, source freshness & scheme versioning
+- [x] **Phase 6 — Security Hardening & Production Prep**: Production provider/JWT guardrails, security headers, PII scrubbing, session retention purge, OpenAI voice provider, Nginx + `docker-compose.prod.yml`, GitHub Actions CI
+- [x] **Phase 7 — Bhashini Integration, BFF Routing & Live Verification**: Bhashini ULCA STT/TTS client, Next.js BFF routes for browser/Docker parity, full-stack container verification
 
 ## Prerequisites
-- Docker and Docker Compose
-- Python 3.11+ (for local development outside docker)
+- Docker and Docker Compose v2
+- Python 3.10+ & Node.js 18+ (for local development outside Docker)
 
 ## Environment Setup
 1. Copy `.env.example` to `.env`:
    ```bash
    cp .env.example .env
    ```
-2. Update `.env` with secure values (especially `JWT_SECRET_KEY` and passwords) for production.
+2. Update `.env` with secure values (especially `JWT_SECRET_KEY`, `OPENAI_API_KEY`, and `VOICE_STT_PROVIDER` / `VOICE_TTS_PROVIDER` for production).
 
-## Running with Docker
-Start the infrastructure:
+## Running with Docker (Development)
+Start PostgreSQL, FastAPI API (`http://localhost:8000`), and Next.js Frontend (`http://localhost:3000`):
 ```bash
-docker-compose up -d
+docker-compose up -d --build
 ```
-This will start PostgreSQL and the FastAPI application on `http://localhost:8000`.
 
-## Database Migrations
-To initialize or upgrade the database schema:
+Initialize schema, create the first admin user, and seed verified schemes:
 ```bash
 docker-compose exec api alembic upgrade head
+docker-compose exec api python -m scripts.create_first_admin
+docker-compose exec api python -m scripts.seed_real_schemes
 ```
 
-## Admin Creation
-To create the first admin user, configure `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` in your `.env` file, then run:
+## Running Tests & Builds
+Backend suite (via Docker):
 ```bash
-docker-compose exec api python -m scripts.create_first_admin
+docker-compose exec -T api pytest -v
+```
+
+Frontend production build:
+```bash
+cd frontend && npm run build
 ```
 
 ## API Documentation
-Once running, visit:
 - Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 - ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
-
-## Running Tests
-To run the automated test suite locally:
-```bash
-docker-compose exec api pytest
-```
 
 ## Architecture & Documentation
 - [Architecture Overview](docs/ARCHITECTURE.md)
@@ -58,3 +57,4 @@ docker-compose exec api pytest
 - [Voice Architecture](docs/VOICE_ARCHITECTURE.md)
 - [Database Design](docs/DATABASE_DESIGN.md)
 - [Security](docs/SECURITY.md)
+- [Production Deployment Guide](docs/DEPLOYMENT.md)
