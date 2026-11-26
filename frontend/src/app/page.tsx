@@ -5,6 +5,14 @@ import { Mic, PhoneOff, Volume2, AlertCircle } from "lucide-react";
 import { languages, translations } from "@/lib/i18n";
 import { useVoicePipeline } from "@/hooks/useVoicePipeline";
 
+const GEMINI_VOICES = [
+  { id: "gemini:Kore", label: "Voice: Hindi Woman — Kore (Default)" },
+  { id: "gemini:Aoede", label: "Voice: Woman — Aoede" },
+  { id: "gemini:Zephyr", label: "Voice: Woman — Zephyr" },
+  { id: "gemini:Puck", label: "Voice: Man — Puck" },
+  { id: "gemini:Charon", label: "Voice: Man — Charon" },
+];
+
 export default function CitizenPage() {
   const [langCode, setLangCode] = useState<string | null>(null);
 
@@ -49,6 +57,30 @@ function VoiceInterface({
 }) {
   const t = translations[language as keyof typeof translations] || translations.hi;
   const historyEndRef = useRef<HTMLDivElement | null>(null);
+  const [voiceId, setVoiceId] = useState<string>("gemini:Kore");
+  const [browserVoices, setBrowserVoices] = useState<Array<{ id: string; label: string }>>([]);
+
+  useEffect(() => {
+    const savedVoice = localStorage.getItem("sahayak_voice");
+    if (savedVoice) setVoiceId(savedVoice);
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      const loadVoices = () => {
+        const list = window.speechSynthesis
+          .getVoices()
+          .filter((v) => v.lang.toLowerCase().startsWith("hi") || v.lang.toLowerCase().startsWith("en-in"))
+          .map((v) => ({ id: `browser:${v.voiceURI}`, label: `Fast Browser: ${v.name}` }));
+        setBrowserVoices(list);
+      };
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  }, []);
+
+  const handleVoiceChange = (nextVoice: string) => {
+    localStorage.setItem("sahayak_voice", nextVoice);
+    setVoiceId(nextVoice);
+  };
 
   const {
     state,
@@ -60,7 +92,7 @@ function VoiceInterface({
     toggleRecording,
     endLiveCall,
     playTTS,
-  } = useVoicePipeline({ language });
+  } = useVoicePipeline({ language, voiceId });
 
   const isListening = state === "LISTENING";
   const isProcessing = state === "PROCESSING";
@@ -92,21 +124,41 @@ function VoiceInterface({
         </div>
         <h2 className="text-lg font-medium text-gray-700 mt-1">{t.title}</h2>
 
-        <select
-          value={language}
-          onChange={(e) => {
-            endLiveCall();
-            onChangeLanguage(e.target.value);
-          }}
-          className="mt-3 bg-white border border-gray-300 rounded px-3 py-1 text-sm shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="Select Language"
-        >
-          {languages.map((l) => (
-            <option key={l.code} value={l.code}>
-              {l.nativeName}
-            </option>
-          ))}
-        </select>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <select
+            value={language}
+            onChange={(e) => {
+              endLiveCall();
+              onChangeLanguage(e.target.value);
+            }}
+            className="bg-white border border-gray-300 rounded px-3 py-1 text-sm shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Select Language"
+          >
+            {languages.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.nativeName}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={voiceId}
+            onChange={(e) => handleVoiceChange(e.target.value)}
+            className="bg-white border border-gray-300 rounded px-3 py-1 text-sm shadow-sm outline-none focus:ring-2 focus:ring-blue-500 max-w-[210px]"
+            aria-label="Select Voice"
+          >
+            {GEMINI_VOICES.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+              </option>
+            ))}
+            {browserVoices.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </header>
 
       {/* Main Interaction Area */}

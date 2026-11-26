@@ -94,7 +94,8 @@ class GeminiTTSProvider(TTSProvider):
         self.model = model or os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-lite-tts")
         self.voice_name = os.getenv("GEMINI_TTS_VOICE", voice_name)
 
-    async def synthesize(self, text: str, language: str) -> bytes:
+    async def synthesize(self, text: str, language: str, voice_name: str | None = None) -> bytes:
+        selected_voice = voice_name or self.voice_name
         payload = {
             "contents": [
                 {
@@ -112,7 +113,7 @@ class GeminiTTSProvider(TTSProvider):
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {
                     "voiceConfig": {
-                        "prebuiltVoiceConfig": {"voiceName": self.voice_name}
+                        "prebuiltVoiceConfig": {"voiceName": selected_voice}
                     }
                 },
             },

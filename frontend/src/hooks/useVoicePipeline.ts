@@ -4,6 +4,7 @@ export type PipelineState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'SPEAKING' | '
 
 interface UseVoicePipelineProps {
   language: string;
+  voiceId?: string;
 }
 
 const MIN_SPEECH_THRESHOLD = 0.025;
@@ -14,7 +15,7 @@ const BARGE_IN_HOLD_MS = 200;
 const MAX_UTTERANCE_MS = 16000;
 const SILENT_CYCLE_MS = 4000;
 
-export function useVoicePipeline({ language }: UseVoicePipelineProps) {
+export function useVoicePipeline({ language, voiceId = 'gemini:Kore' }: UseVoicePipelineProps) {
   const [state, setState] = useState<PipelineState>('IDLE');
   const [isLiveCall, setIsLiveCall] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
@@ -160,16 +161,23 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
         return false;
       }
-      const hindiFemaleVoice = selectHindiFemaleVoice();
-      // Only use instant browser speech if a Hindi voice is available so voice stays consistent everywhere
-      if (!hindiFemaleVoice) {
+      const voices = window.speechSynthesis.getVoices();
+      let selectedVoice: SpeechSynthesisVoice | null = null;
+      if (voiceId.startsWith('browser:')) {
+        const uri = voiceId.slice('browser:'.length);
+        selectedVoice = voices.find((v) => v.voiceURI === uri) || null;
+      }
+      if (!selectedVoice) {
+        selectedVoice = selectHindiFemaleVoice();
+      }
+      if (!selectedVoice) {
         return false;
       }
 
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(text);
-      utter.voice = hindiFemaleVoice;
-      utter.lang = hindiFemaleVoice.lang || 'hi-IN';
+      utter.voice = selectedVoice;
+      utter.lang = selectedVoice.lang || 'hi-IN';
       utter.rate = 1.02;
 
       utter.onend = () => {
@@ -185,11 +193,12 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
       window.speechSynthesis.speak(utter);
       return true;
     },
-    [beginListeningTurn, selectHindiFemaleVoice, updateState]
+    [beginListeningTurn, selectHindiFemaleVoice, updateState, voiceId]
   );
 
   const playServerAudioOrFallback = useCallback(
     async (text: string, audioBase64?: string | null, mimeType?: string | null) => {
+      const geminiVoiceName = voiceId.startsWith('gemini:') ? voiceId.slice('gemini:'.length) : 'Kore';
       try {
         stopPlayback();
         let blobUrl: string;
@@ -202,7 +211,7 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
           const ttsRes = await fetch('/api/voice/synthesize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, language }),
+            body: JSON.stringify({ text, language, voice_name: geminiVoiceName }),
           });
           if (!ttsRes.ok) throw new Error('TTS failed');
           blobUrl = URL.createObjectURL(await ttsRes.blob());
@@ -233,7 +242,7 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
         }
       }
     },
-    [beginListeningTurn, language, speakFast, stopPlayback, updateState]
+    [beginListeningTurn, language, speakFast, stopPlayback, updateState, voiceId]
   );
 
   const sendVoiceTurn = async (audioBlob: Blob) => {
@@ -244,8 +253,8 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    // Use instant browser Hindi female voice when available; otherwise use Gemini TTS (Kore)
-    const hasInstantVoice = Boolean(selectHindiFemaleVoice());
+    const useBrowserVoice = voiceId.startsWith('browser:') && typeof window !== 'undefined' && 'speechSynthesis' in window;
+    const geminiVoiceName = voiceId.startsWith('gemini:') ? voiceId.slice('gemini:'.length) : 'Kore';
 
     try {
       updateState('PROCESSING');
@@ -254,7 +263,8 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
       const formData = new FormData();
       formData.append('audio', audioBlob, 'utterance.webm');
       formData.append('language', language);
-      formData.append('include_audio', hasInstantVoice ? 'false' : 'true');
+      formData.append('include_audio', useBrowserVoice ? 'false' : 'true');
+      formData.append('voice_name', geminiVoiceName);
       if (conversationIdRef.current) {
         formData.append('conversation_id', conversationIdRef.current);
       }
@@ -285,7 +295,7 @@ export function useVoicePipeline({ language }: UseVoicePipelineProps) {
       ]);
 
       isSendingRef.current = false;
-      if (hasInstantVoice && speakFast(data.response_text)) {
+      if (useBrowserVoice && speakFast(data.response_text)) {
         return;
       }
       await playServerAudioOrFallback(data.response_text, data.audio_base64, data.audio_mime_type);

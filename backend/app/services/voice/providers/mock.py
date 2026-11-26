@@ -14,7 +14,7 @@ class MockSTTProvider(STTProvider):
         return "I am 65 years old and I live in Madhya Pradesh."
 
 class MockTTSProvider(TTSProvider):
-    async def synthesize(self, text: str, language: str) -> bytes:
+    async def synthesize(self, text: str, language: str, voice_name: str | None = None) -> bytes:
         # Generate a tiny, valid WAV file in memory (just a short silence/beep)
         # This allows the frontend HTMLAudioElement to successfully load and 'play' it.
         output = io.BytesIO()

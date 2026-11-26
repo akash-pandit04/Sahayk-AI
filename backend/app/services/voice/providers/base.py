@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
 class STTProvider(ABC):
     @abstractmethod
@@ -11,7 +12,7 @@ class STTProvider(ABC):
 
 class TTSProvider(ABC):
     @abstractmethod
-    async def synthesize(self, text: str, language: str) -> bytes:
+    async def synthesize(self, text: str, language: str, voice_name: Optional[str] = None) -> bytes:
         """
         Convert text to audio bytes in the specified language.
         Return format should ideally be a standard format like WAV or MP3.

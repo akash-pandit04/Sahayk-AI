@@ -14,6 +14,7 @@ router = APIRouter()
 class SynthesizeRequest(BaseModel):
     text: str
     language: str
+    voice_name: Optional[str] = None
 
 @router.post("/transcribe", dependencies=[Depends(rate_limit(requests=10, window=60))])
 async def transcribe_audio(
@@ -81,7 +82,7 @@ async def synthesize_speech(
         
     try:
         tts_provider = get_tts_provider()
-        audio_bytes = await tts_provider.synthesize(req.text, req.language)
+        audio_bytes = await tts_provider.synthesize(req.text, req.language, voice_name=req.voice_name)
         
         return Response(content=audio_bytes, media_type="audio/wav")
     except Exception as e:
@@ -95,6 +96,7 @@ async def voice_conversation_turn(
     language: str = Form("hi"),
     conversation_id: Optional[str] = Form(None),
     include_audio: bool = Form(True),
+    voice_name: Optional[str] = Form(None),
     audio: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -140,7 +142,7 @@ async def voice_conversation_turn(
     if include_audio:
         try:
             tts_provider = get_tts_provider()
-            wav_bytes = await tts_provider.synthesize(result["response_text"], language)
+            wav_bytes = await tts_provider.synthesize(result["response_text"], language, voice_name=voice_name)
             audio_b64 = base64.b64encode(wav_bytes).decode("utf-8")
         except Exception as e:
             logging.warning(f"Voice turn TTS fallback (returning text only): {e}")
