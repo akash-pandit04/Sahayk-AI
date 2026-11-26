@@ -61,7 +61,7 @@ function VoiceInterface({
   const [browserVoices, setBrowserVoices] = useState<Array<{ id: string; label: string }>>([]);
 
   useEffect(() => {
-    const savedVoice = localStorage.getItem("sahayak_voice");
+    const savedVoice = localStorage.getItem("sahayak_voice_v2");
     if (savedVoice) setVoiceId(savedVoice);
 
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -78,7 +78,7 @@ function VoiceInterface({
   }, []);
 
   const handleVoiceChange = (nextVoice: string) => {
-    localStorage.setItem("sahayak_voice", nextVoice);
+    localStorage.setItem("sahayak_voice_v2", nextVoice);
     setVoiceId(nextVoice);
   };
 

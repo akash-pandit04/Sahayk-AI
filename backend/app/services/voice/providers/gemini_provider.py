@@ -89,21 +89,24 @@ class GeminiSTTProvider(STTProvider):
 class GeminiTTSProvider(TTSProvider):
     """Text-to-Speech using Gemini audio generation."""
 
+    MALE_VOICES = {"Puck", "Charon", "Fenrir", "Orus"}
+
     def __init__(self, api_key: str, model: str | None = None, voice_name: str = "Kore"):
         self.api_key = api_key
-        self.model = model or os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-lite-tts")
+        self.model = model or os.getenv("GEMINI_TTS_MODEL", "gemini-3.1-flash-tts-preview")
         self.voice_name = os.getenv("GEMINI_TTS_VOICE", voice_name)
 
     async def synthesize(self, text: str, language: str, voice_name: str | None = None) -> bytes:
         selected_voice = voice_name or self.voice_name
+        gender_persona = "male" if selected_voice in self.MALE_VOICES else "female"
         payload = {
             "contents": [
                 {
                     "parts": [
                         {
                             "text": (
-                                "Read the following text aloud naturally using a warm, clear Indian Hindi female voice persona "
-                                f"(consistent Hindi woman voice regardless of script/language '{language}'): {text}"
+                                f"Read the following text aloud naturally using a warm, clear Indian Hindi {gender_persona} voice persona "
+                                f"(consistent Hindi voice regardless of script/language '{language}'): {text}"
                             )
                         }
                     ]
@@ -119,8 +122,15 @@ class GeminiTTSProvider(TTSProvider):
             },
         }
         headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
-        candidates = [self.model]
-        for fallback in ("gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"):
+        candidates = []
+        if self.model not in ("gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"):
+            candidates.append(self.model)
+        for fallback in (
+            "gemini-3.1-flash-tts-preview",
+            "gemini-2.5-flash-preview-tts",
+            "gemini-3.8-flash-lite-tts",
+            "gemini-3.8-flash-tts",
+        ):
             if fallback not in candidates:
                 candidates.append(fallback)
 
