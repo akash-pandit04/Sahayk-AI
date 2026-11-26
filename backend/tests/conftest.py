@@ -4,6 +4,7 @@ import os
 # Set explicit provider configuration for local testing as per requirements
 os.environ["VOICE_STT_PROVIDER"] = "mock"
 os.environ["VOICE_TTS_PROVIDER"] = "mock"
+os.environ["GEMINI_API_KEY"] = ""
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

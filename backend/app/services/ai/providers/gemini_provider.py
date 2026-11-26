@@ -12,10 +12,9 @@ GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 class GeminiLLMProvider(LLMProvider):
     def __init__(self, api_key: str, model: str | None = None):
         self.api_key = api_key
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
     async def _generate(self, system_instruction: str, user_text: str, json_mode: bool = False) -> str:
-        url = f"{GEMINI_API_BASE}/{self.model}:generateContent"
         payload: dict = {
             "systemInstruction": {"parts": [{"text": system_instruction}]},
             "contents": [{"role": "user", "parts": [{"text": user_text}]}],
@@ -24,12 +23,32 @@ class GeminiLLMProvider(LLMProvider):
             payload["generationConfig"] = {"responseMimeType": "application/json"}
 
         headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        candidates = [self.model]
+        for fallback in ("gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-flash-latest"):
+            if fallback not in candidates:
+                candidates.append(fallback)
 
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        last_err: Exception | None = None
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for model_name in candidates:
+                url = f"{GEMINI_API_BASE}/{model_name}:generateContent"
+                try:
+                    resp = await client.post(url, json=payload, headers=headers)
+                    if resp.status_code in (404, 429, 503):
+                        last_err = httpx.HTTPStatusError(
+                            f"{resp.status_code} for {model_name}", request=resp.request, response=resp
+                        )
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
+                    return data["candidates"][0]["content"]["parts"][0]["text"]
+                except (httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+                    last_err = e
+                    continue
+
+        if last_err:
+            raise last_err
+        raise RuntimeError("No Gemini model succeeded")
 
     async def extract_intent_and_profile(self, user_message: str, current_profile: dict) -> dict:
         system_prompt = (

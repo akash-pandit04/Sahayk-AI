@@ -69,7 +69,7 @@ async def normalize_scheme_text(raw_text: str) -> Dict[str, Any]:
     }
     """
 
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     url = f"{GEMINI_API_BASE}/{model}:generateContent"
     payload = {
         "systemInstruction": {"parts": [{"text": system_prompt}]},

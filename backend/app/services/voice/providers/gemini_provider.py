@@ -36,7 +36,7 @@ class GeminiSTTProvider(STTProvider):
 
     def __init__(self, api_key: str, model: str | None = None):
         self.api_key = api_key
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
     async def transcribe(self, audio_bytes: bytes, language: str) -> str:
         url = f"{GEMINI_API_BASE}/{self.model}:generateContent"
@@ -73,7 +73,7 @@ class GeminiTTSProvider(TTSProvider):
 
     def __init__(self, api_key: str, model: str | None = None, voice_name: str = "Kore"):
         self.api_key = api_key
-        self.model = model or os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+        self.model = model or os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts")
         self.voice_name = voice_name
 
     async def synthesize(self, text: str, language: str) -> bytes:
