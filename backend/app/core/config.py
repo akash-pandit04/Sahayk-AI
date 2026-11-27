@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-3.5-flash-lite"
     GEMINI_STT_MODEL: str = "gemini-3.5-flash-lite"
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
-    GEMINI_TTS_MODEL: str = "gemini-3.1-flash-tts-preview"
+    GEMINI_TTS_MODEL: str = "gemini-3.8-flash-lite-tts"
     VOICE_STT_PROVIDER: str = "mock"
     VOICE_TTS_PROVIDER: str = "mock"
 

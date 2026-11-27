@@ -93,20 +93,25 @@ class GeminiTTSProvider(TTSProvider):
 
     def __init__(self, api_key: str, model: str | None = None, voice_name: str = "Kore"):
         self.api_key = api_key
-        self.model = model or os.getenv("GEMINI_TTS_MODEL", "gemini-3.1-flash-tts-preview")
+        self.model = model or os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-lite-tts")
         self.voice_name = os.getenv("GEMINI_TTS_VOICE", voice_name)
 
     async def synthesize(self, text: str, language: str, voice_name: str | None = None) -> bytes:
         selected_voice = voice_name or self.voice_name
-        gender_persona = "male" if selected_voice in self.MALE_VOICES else "female"
+        is_male = selected_voice in self.MALE_VOICES
+        persona = (
+            "warm, clear Indian Hindi male voice persona (consistent Hindi man voice"
+            if is_male
+            else "warm, clear Indian Hindi female voice persona (consistent Hindi woman voice"
+        )
         payload = {
             "contents": [
                 {
                     "parts": [
                         {
                             "text": (
-                                f"Read the following text aloud naturally using a warm, clear Indian Hindi {gender_persona} voice persona "
-                                f"(consistent Hindi voice regardless of script/language '{language}'): {text}"
+                                f"Read the following text aloud naturally using a {persona} "
+                                f"regardless of script/language '{language}'): {text}"
                             )
                         }
                     ]
@@ -122,14 +127,12 @@ class GeminiTTSProvider(TTSProvider):
             },
         }
         headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
-        candidates = []
-        if self.model not in ("gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"):
-            candidates.append(self.model)
+        candidates = [self.model]
         for fallback in (
-            "gemini-3.1-flash-tts-preview",
-            "gemini-2.5-flash-preview-tts",
             "gemini-3.8-flash-lite-tts",
             "gemini-3.8-flash-tts",
+            "gemini-3.1-flash-tts-preview",
+            "gemini-2.5-flash-preview-tts",
         ):
             if fallback not in candidates:
                 candidates.append(fallback)
@@ -160,9 +163,9 @@ class GeminiTTSProvider(TTSProvider):
 
         inline = data["candidates"][0]["content"]["parts"][0]["inlineData"]
         audio_bytes = base64.b64decode(inline["data"])
-        mime_type = inline.get("mimeType", "")
-        if "pcm" in mime_type.lower():
-            rate_match = re.search(r"rate=(\d+)", mime_type)
+        mime_lower = inline.get("mimeType", "").lower()
+        if not audio_bytes.startswith(b"RIFF") and ("pcm" in mime_lower or "l16" in mime_lower or not mime_lower):
+            rate_match = re.search(r"rate=(\d+)", mime_lower)
             rate = int(rate_match.group(1)) if rate_match else 24000
             return _pcm_to_wav(audio_bytes, sample_rate=rate)
         return audio_bytes

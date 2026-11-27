@@ -108,6 +108,34 @@ async def test_gemini_stt_and_tts_pcm_to_wav():
             assert wf.getframerate() == 24000
             assert wf.getnchannels() == 1
 
+    # Also verify audio/l16 (used by gemini-3.1-flash-tts-preview) is wrapped with RIFF WAV header
+    l16_resp = MagicMock()
+    l16_resp.raise_for_status = MagicMock()
+    l16_resp.json.return_value = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "inlineData": {
+                                "mimeType": "audio/l16; rate=24000; channels=1",
+                                "data": base64.b64encode(pcm_frames).decode("utf-8"),
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+    mock_l16_client = MagicMock()
+    mock_l16_client.__aenter__ = AsyncMock(return_value=mock_l16_client)
+    mock_l16_client.__aexit__ = AsyncMock(return_value=False)
+    mock_l16_client.post = AsyncMock(return_value=l16_resp)
+    with patch("app.services.voice.providers.gemini_provider.httpx.AsyncClient", return_value=mock_l16_client):
+        tts = GeminiTTSProvider(api_key="gem-key", model="gemini-3.1-flash-tts-preview")
+        wav_l16 = await tts.synthesize("नमस्ते", "hi")
+        assert wav_l16.startswith(b"RIFF")
+
 
 def test_gemini_factories():
     with patch.dict(

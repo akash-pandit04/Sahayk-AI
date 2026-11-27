@@ -311,6 +311,12 @@ export function useVoicePipeline({ language, voiceId = 'gemini:Kore' }: UseVoice
 
   const playTTS = useCallback(
     async (text: string) => {
+      if (!audioPlayerRef.current) {
+        audioPlayerRef.current = new Audio();
+      }
+      audioPlayerRef.current.src =
+        'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+      audioPlayerRef.current.play().catch(() => {});
       await playServerAudioOrFallback(text, null, null);
     },
     [playServerAudioOrFallback]
